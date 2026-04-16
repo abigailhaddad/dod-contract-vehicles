@@ -196,6 +196,11 @@ def stream_and_aggregate() -> dict:
     # Track sum of federal_action_obligation per contract (it's per-transaction)
     fao_sums = defaultdict(float)
 
+    # Only keep contracts with PoP end date within the last year or in the future.
+    # This drops ~60-70% of rows (old expired contracts) and keeps memory manageable.
+    cutoff_date = date(TODAY.year - 1, TODAY.month, TODAY.day).isoformat()
+    skipped = 0
+
     total_rows = 0
     for src_name, src_iter in sources:
         print(f"  Streaming {src_name}...", end=" ", flush=True)
@@ -208,6 +213,15 @@ def stream_and_aggregate() -> dict:
 
             key = _val(row, "contract_award_unique_key")
             if not key:
+                continue
+
+            # Early filter: skip transactions for contracts that ended > 1 year ago.
+            # Check both current and potential end dates.
+            pop_end = _val(row, "period_of_performance_current_end_date") or ""
+            pop_potential = _val(row, "period_of_performance_potential_end_date") or ""
+            best_end = max(pop_end[:10], pop_potential[:10]) if pop_end or pop_potential else ""
+            if best_end and best_end < cutoff_date:
+                skipped += 1
                 continue
 
             action_date = _val(row, "action_date") or ""
@@ -261,7 +275,7 @@ def stream_and_aggregate() -> dict:
 
         print(f"{file_rows:,} rows")
 
-    print(f"  Total: {total_rows:,} transactions -> {len(contracts):,} unique contracts")
+    print(f"  Total: {total_rows:,} transactions, {skipped:,} skipped (expired), {len(contracts):,} unique contracts")
 
     # Apply fao fallback for contracts missing total_dollars_obligated
     for key, c in contracts.items():
