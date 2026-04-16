@@ -11,6 +11,10 @@ on:
         description: "Re-download even if checkpoint exists"
         type: boolean
         default: false
+      build_only:
+        description: "Skip fetch, just rebuild dashboard from R2 data"
+        type: boolean
+        default: false
   schedule:
     - cron: "0 8 1 * *"  # 1st of each month at 8am UTC
 
@@ -26,6 +30,7 @@ jobs:
   fetch:
     runs-on: ubuntu-latest
     timeout-minutes: 350
+    if: ${{ inputs.build_only != true }}
 
     env:
       CF_R2_ACCOUNT_ID: ${{ secrets.CF_R2_ACCOUNT_ID }}
@@ -46,7 +51,7 @@ jobs:
       - name: Download checkpoints from R2
         run: |
           python r2_sync.py download --dir data/bulk_checkpoints
-          # Remove any stale merged CSV that may have been uploaded as a checkpoint
+          # Remove any stale merged CSV that landed in checkpoints
           rm -f data/bulk_checkpoints/dod_contracts_bulk.csv
 
       - name: Run fetch
@@ -60,7 +65,7 @@ jobs:
             ARGS="$ARGS --force"
           fi
           python fetch_awards.py $ARGS
-          # Delete the merged CSV to save disk -- build reads checkpoints directly
+          # Delete merged CSV to save disk
           rm -f data/dod_contracts_bulk.csv
           echo "status=$(cat data/scan_status.txt)" >> $GITHUB_OUTPUT
 
@@ -68,12 +73,43 @@ jobs:
         if: always()
         run: python r2_sync.py upload --dir data/bulk_checkpoints
 
-      - name: Build dashboard
-        if: steps.fetch.outputs.status == 'done'
+      - name: Chain next run if IP blocked
+        if: steps.fetch.outputs.status == 'blocked'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "IP blocked -- chaining next run with fresh runner IP"
+          gh workflow run fetch.yml --repo ${{ github.repository }}
+
+    outputs:
+      status: ${{ steps.fetch.outputs.status }}
+
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    needs: [fetch]
+    if: ${{ always() && (needs.fetch.outputs.status == 'done' || needs.fetch.result == 'skipped') }}
+
+    env:
+      CF_R2_ACCOUNT_ID: ${{ secrets.CF_R2_ACCOUNT_ID }}
+      CF_R2_BUCKET: ${{ secrets.CF_R2_BUCKET }}
+      CF_R2_ACCESS_KEY_ID: ${{ secrets.CF_R2_ACCESS_KEY_ID }}
+      CF_R2_SECRET_ACCESS_KEY: ${{ secrets.CF_R2_SECRET_ACCESS_KEY }}
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install boto3
+
+      - name: Build dashboard (streams from R2, no local data needed)
         run: python build_dashboard.py
 
       - name: Commit dashboard data
-        if: steps.fetch.outputs.status == 'done'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -84,11 +120,3 @@ jobs:
             git commit -m "Update dashboard data ($(date -u +%Y-%m-%d))"
             git push
           fi
-
-      - name: Chain next run if IP blocked
-        if: steps.fetch.outputs.status == 'blocked'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          echo "IP blocked -- chaining next run with fresh runner IP"
-          gh workflow run fetch.yml --repo ${{ github.repository }}

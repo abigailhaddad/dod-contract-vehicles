@@ -115,15 +115,37 @@ def _sam_url(sol_id: str | None) -> str | None:
 # Streaming aggregation
 # ---------------------------------------------------------------------------
 
-def _data_sources() -> list[Path]:
-    """Find CSV files to read: merged CSV or checkpoint files."""
-    if BULK_CSV.exists():
-        return [BULK_CSV]
-    checkpoints = sorted(CHECKPOINT_DIR.glob("FY*.csv"))
-    sources = [cp for cp in checkpoints if cp.stat().st_size > 0]
-    if sources:
-        return sources
-    raise FileNotFoundError("No data found -- run fetch_awards.py first.")
+def _r2_client():
+    """Create an R2 client if credentials are available."""
+    import os
+    account_id = os.environ.get("CF_R2_ACCOUNT_ID")
+    if not account_id:
+        return None, None
+    import boto3
+    from botocore.config import Config
+    s3 = boto3.client(
+        "s3",
+        endpoint_url=f"https://{account_id}.r2.cloudflarestorage.com",
+        aws_access_key_id=os.environ["CF_R2_ACCESS_KEY_ID"],
+        aws_secret_access_key=os.environ["CF_R2_SECRET_ACCESS_KEY"],
+        config=Config(signature_version="s3v4"),
+        region_name="auto",
+    )
+    return s3, os.environ["CF_R2_BUCKET"]
+
+
+def _stream_r2_csv(s3, bucket: str, key: str):
+    """Stream a CSV from R2 row by row -- never written to disk."""
+    resp = s3.get_object(Bucket=bucket, Key=key)
+    reader = csv.DictReader(io.TextIOWrapper(resp["Body"], encoding="utf-8-sig"))
+    yield from reader
+
+
+def _stream_local_csv(path: Path):
+    """Stream a local CSV row by row."""
+    with open(path, newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        yield from reader
 
 
 def stream_and_aggregate() -> dict:
@@ -132,9 +154,42 @@ def stream_and_aggregate() -> dict:
     For each contract, we keep the latest transaction's values (by action_date).
     federal_action_obligation is summed across all transactions.
     Memory: ~2-4KB per unique contract, ~500K-1M contracts = ~2-4GB peak.
+
+    Data sources (in priority order):
+      1. Local merged CSV (data/dod_contracts_bulk.csv)
+      2. Local checkpoint files (data/bulk_checkpoints/FY*.csv)
+      3. R2 checkpoint files (streamed, never written to disk)
     """
-    sources = _data_sources()
-    print(f"Reading from {len(sources)} file(s)...")
+    # Determine data sources
+    sources = []  # list of (name, iterator_factory)
+
+    if BULK_CSV.exists():
+        sources.append((BULK_CSV.name, lambda p=BULK_CSV: _stream_local_csv(p)))
+    else:
+        local_cps = sorted(CHECKPOINT_DIR.glob("FY*.csv"))
+        local_cps = [cp for cp in local_cps if cp.stat().st_size > 0]
+        if local_cps:
+            for cp in local_cps:
+                sources.append((cp.name, lambda p=cp: _stream_local_csv(p)))
+
+    if not sources:
+        # Try R2
+        s3, bucket = _r2_client()
+        if s3:
+            print("No local data -- streaming from R2...")
+            prefix = "dod_vehicles/"
+            paginator = s3.get_paginator("list_objects_v2")
+            for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
+                for obj in page.get("Contents", []):
+                    key = obj["Key"]
+                    name = Path(key).name
+                    if name.startswith("FY") and name.endswith(".csv"):
+                        sources.append((name, lambda k=key: _stream_r2_csv(s3, bucket, k)))
+
+    if not sources:
+        raise FileNotFoundError("No data found -- run fetch_awards.py first.")
+
+    print(f"Reading from {len(sources)} source(s)...")
 
     # contracts[key] = {field: value, ...} — latest transaction wins
     contracts = {}
@@ -142,79 +197,67 @@ def stream_and_aggregate() -> dict:
     fao_sums = defaultdict(float)
 
     total_rows = 0
-    for src in sources:
-        print(f"  Streaming {src.name}...", end=" ", flush=True)
+    for src_name, src_iter in sources:
+        print(f"  Streaming {src_name}...", end=" ", flush=True)
         file_rows = 0
-        with open(src, newline="", encoding="utf-8") as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                total_rows += 1
-                file_rows += 1
-                if total_rows % 2_000_000 == 0:
-                    print(f"{total_rows // 1_000_000}M...", end=" ", flush=True)
+        for row in src_iter():
+            total_rows += 1
+            file_rows += 1
+            if total_rows % 2_000_000 == 0:
+                print(f"{total_rows // 1_000_000}M...", end=" ", flush=True)
 
-                key = _val(row, "contract_award_unique_key")
-                if not key:
-                    continue
+            key = _val(row, "contract_award_unique_key")
+            if not key:
+                continue
 
-                action_date = _val(row, "action_date") or ""
+            action_date = _val(row, "action_date") or ""
 
-                # Sum federal_action_obligation across all mods
-                fao = _float(row, "federal_action_obligation")
-                if fao:
-                    fao_sums[key] += fao
+            # Sum federal_action_obligation across all mods
+            fao = _float(row, "federal_action_obligation")
+            if fao:
+                fao_sums[key] += fao
 
-                # Keep latest transaction (by action_date string comparison)
-                existing = contracts.get(key)
-                if existing and existing.get("_action_date", "") > action_date:
-                    continue  # existing is newer, skip this row
+            # Keep latest transaction (by action_date string comparison)
+            existing = contracts.get(key)
+            if existing and existing.get("_action_date", "") > action_date:
+                continue  # existing is newer, skip this row
 
-                # Store only the fields we need
-                contracts[key] = {
-                    "_action_date":       action_date,
-                    "key":                key,
-                    "piid":               _val(row, "award_id_piid"),
-                    "parent_piid":        _val(row, "parent_award_id_piid"),
-                    # Dollars (cumulative — take latest)
-                    "obligated":          _float(row, "total_dollars_obligated"),
-                    "ceiling":            _float(row, "potential_total_value_of_award"),
-                    # Dates
-                    "pop_start":          _val(row, "period_of_performance_start_date"),
-                    "pop_end":            _val(row, "period_of_performance_current_end_date"),
-                    "pop_potential_end":  _val(row, "period_of_performance_potential_end_date"),
-                    # Agency
-                    "department":         _val(row, "awarding_agency_name"),
-                    "sub_agency":         _val(row, "awarding_sub_agency_name"),
-                    "awarding_office":    _val(row, "awarding_office_name"),
-                    "funding_office":     _val(row, "funding_office_name"),
-                    # Contractor
-                    "recipient_uei":      _val(row, "recipient_uei"),
-                    "recipient_name":     _val(row, "recipient_name"),
-                    "recipient_parent":   _val(row, "recipient_parent_name"),
-                    # Vehicle
-                    "parent_award_type_code": _val(row, "parent_award_type_code"),
-                    "parent_award_type":  _val(row, "parent_award_type"),
-                    # Scope
-                    "award_description":  _val(row, "award_description"),
-                    "base_description":   _val(row, "prime_award_base_transaction_description"),
-                    "txn_description":    _val(row, "transaction_description"),
-                    "naics_code":         _val(row, "naics_code"),
-                    "naics_description":  _val(row, "naics_description"),
-                    "psc_code":           _val(row, "product_or_service_code"),
-                    "psc_description":    _val(row, "product_or_service_code_description"),
-                    "solicitation_id":    _val(row, "solicitation_identifier"),
-                    # Competition
-                    "set_aside":          _val(row, "type_of_set_aside_code") or "NONE",
-                    "pricing_type":       _val(row, "type_of_contract_pricing_code"),
-                    "pricing_label":      _val(row, "type_of_contract_pricing"),
-                    "num_offers":         _val(row, "number_of_offers_received"),
-                    # Place
-                    "place_state":        _val(row, "primary_place_of_performance_state_code"),
-                    # Business size
-                    "business_size_label": _val(row, "contracting_officers_determination_of_business_size"),
-                    # Link
-                    "usaspending_link":   _val(row, "usaspending_permalink"),
-                }
+            # Store only the fields we need
+            contracts[key] = {
+                "_action_date":       action_date,
+                "key":                key,
+                "piid":               _val(row, "award_id_piid"),
+                "parent_piid":        _val(row, "parent_award_id_piid"),
+                "obligated":          _float(row, "total_dollars_obligated"),
+                "ceiling":            _float(row, "potential_total_value_of_award"),
+                "pop_start":          _val(row, "period_of_performance_start_date"),
+                "pop_end":            _val(row, "period_of_performance_current_end_date"),
+                "pop_potential_end":  _val(row, "period_of_performance_potential_end_date"),
+                "department":         _val(row, "awarding_agency_name"),
+                "sub_agency":         _val(row, "awarding_sub_agency_name"),
+                "awarding_office":    _val(row, "awarding_office_name"),
+                "funding_office":     _val(row, "funding_office_name"),
+                "recipient_uei":      _val(row, "recipient_uei"),
+                "recipient_name":     _val(row, "recipient_name"),
+                "recipient_parent":   _val(row, "recipient_parent_name"),
+                "parent_award_type_code": _val(row, "parent_award_type_code"),
+                "parent_award_type":  _val(row, "parent_award_type"),
+                "award_description":  _val(row, "award_description"),
+                "base_description":   _val(row, "prime_award_base_transaction_description"),
+                "txn_description":    _val(row, "transaction_description"),
+                "naics_code":         _val(row, "naics_code"),
+                "naics_description":  _val(row, "naics_description"),
+                "psc_code":           _val(row, "product_or_service_code"),
+                "psc_description":    _val(row, "product_or_service_code_description"),
+                "solicitation_id":    _val(row, "solicitation_identifier"),
+                "set_aside":          _val(row, "type_of_set_aside_code") or "NONE",
+                "pricing_type":       _val(row, "type_of_contract_pricing_code"),
+                "pricing_label":      _val(row, "type_of_contract_pricing"),
+                "num_offers":         _val(row, "number_of_offers_received"),
+                "place_state":        _val(row, "primary_place_of_performance_state_code"),
+                "business_size_label": _val(row, "contracting_officers_determination_of_business_size"),
+                "usaspending_link":   _val(row, "usaspending_permalink"),
+            }
 
         print(f"{file_rows:,} rows")
 
