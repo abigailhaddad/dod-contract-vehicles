@@ -17,7 +17,6 @@ Run:
 """
 
 import csv
-import io
 import json
 import sys
 from collections import defaultdict
@@ -134,16 +133,9 @@ def _r2_client():
     return s3, os.environ["CF_R2_BUCKET"]
 
 
-def _stream_r2_csv(s3, bucket: str, key: str):
-    """Stream a CSV from R2 row by row -- never written to disk."""
-    resp = s3.get_object(Bucket=bucket, Key=key)
-    reader = csv.DictReader(io.TextIOWrapper(resp["Body"], encoding="utf-8-sig"))
-    yield from reader
-
-
 def _stream_local_csv(path: Path):
     """Stream a local CSV row by row."""
-    with open(path, newline="", encoding="utf-8") as f:
+    with open(path, newline="", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
         yield from reader
 
@@ -158,7 +150,7 @@ def stream_and_aggregate() -> dict:
     Data sources (in priority order):
       1. Local merged CSV (data/dod_contracts_bulk.csv)
       2. Local checkpoint files (data/bulk_checkpoints/FY*.csv)
-      3. R2 checkpoint files (streamed, never written to disk)
+      3. R2 checkpoint files (downloaded once to scratch disk, then streamed)
     """
     # Determine data sources
     sources = []  # list of (name, iterator_factory)
@@ -173,10 +165,14 @@ def stream_and_aggregate() -> dict:
                 sources.append((cp.name, lambda p=cp: _stream_local_csv(p)))
 
     if not sources:
-        # Try R2
+        # Download R2 checkpoints to scratch disk. Using download_file (not
+        # long-lived get_object streams) -- Transfer Manager handles retry
+        # and avoids the mid-read connection drops we were hitting.
         s3, bucket = _r2_client()
         if s3:
-            print("No local data -- streaming from R2...")
+            import tempfile
+            scratch = Path(tempfile.mkdtemp(prefix="r2_cache_"))
+            print(f"No local data -- downloading from R2 to {scratch}...")
             prefix = "dod_vehicles/"
             paginator = s3.get_paginator("list_objects_v2")
             for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
@@ -184,7 +180,11 @@ def stream_and_aggregate() -> dict:
                     key = obj["Key"]
                     name = Path(key).name
                     if name.startswith("FY") and name.endswith(".csv"):
-                        sources.append((name, lambda k=key: _stream_r2_csv(s3, bucket, k)))
+                        local = scratch / name
+                        print(f"  Downloading {name}...", end=" ", flush=True)
+                        s3.download_file(bucket, key, str(local))
+                        print(f"{local.stat().st_size // (1024*1024):,} MB", flush=True)
+                        sources.append((name, lambda p=local: _stream_local_csv(p)))
 
     if not sources:
         raise FileNotFoundError("No data found -- run fetch_awards.py first.")
