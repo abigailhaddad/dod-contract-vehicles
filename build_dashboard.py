@@ -196,9 +196,9 @@ def stream_and_aggregate() -> dict:
     # Track sum of federal_action_obligation per contract (it's per-transaction)
     fao_sums = defaultdict(float)
 
-    # Only keep contracts with PoP end date within the last year or in the future.
-    # This drops ~60-70% of rows (old expired contracts) and keeps memory manageable.
-    cutoff_date = date(TODAY.year - 1, TODAY.month, TODAY.day).isoformat()
+    # Drop expired contracts. Keeps Active, Expiring Soon, Unknown, and any
+    # contract whose potential end is still in the future.
+    cutoff_date = TODAY_STR
     skipped = 0
 
     total_rows = 0
@@ -215,8 +215,7 @@ def stream_and_aggregate() -> dict:
             if not key:
                 continue
 
-            # Early filter: skip transactions for contracts that ended > 1 year ago.
-            # Check both current and potential end dates.
+            # Early filter: drop expired contracts (best end date < today).
             pop_end = _val(row, "period_of_performance_current_end_date") or ""
             pop_potential = _val(row, "period_of_performance_potential_end_date") or ""
             best_end = max(pop_end[:10], pop_potential[:10]) if pop_end or pop_potential else ""
@@ -236,7 +235,8 @@ def stream_and_aggregate() -> dict:
             if existing and existing.get("_action_date", "") > action_date:
                 continue  # existing is newer, skip this row
 
-            # Store only the fields we need
+            # Store only the fields we need. Description fields are filled
+            # by a second pass (they're bulky and not needed for filter/status).
             contracts[key] = {
                 "_action_date":       action_date,
                 "key":                key,
@@ -256,9 +256,6 @@ def stream_and_aggregate() -> dict:
                 "recipient_parent":   _val(row, "recipient_parent_name"),
                 "parent_award_type_code": _val(row, "parent_award_type_code"),
                 "parent_award_type":  _val(row, "parent_award_type"),
-                "award_description":  _val(row, "award_description"),
-                "base_description":   _val(row, "prime_award_base_transaction_description"),
-                "txn_description":    _val(row, "transaction_description"),
                 "naics_code":         _val(row, "naics_code"),
                 "naics_description":  _val(row, "naics_description"),
                 "psc_code":           _val(row, "product_or_service_code"),
@@ -281,6 +278,29 @@ def stream_and_aggregate() -> dict:
     for key, c in contracts.items():
         if not c["obligated"] or c["obligated"] == 0:
             c["obligated"] = fao_sums.get(key)
+
+    # Second pass: fetch descriptions only for surviving contracts.
+    # Picks the description fields from each contract's latest transaction,
+    # matching pass-1 semantics.
+    print("\nFetching descriptions (second pass, surviving contracts only)...")
+    desc_latest = {}  # key -> latest action_date for which we stored a description
+    for src_name, src_iter in sources:
+        print(f"  Streaming {src_name}...", end=" ", flush=True)
+        row_count = 0
+        for row in src_iter():
+            row_count += 1
+            key = _val(row, "contract_award_unique_key")
+            if not key or key not in contracts:
+                continue
+            action_date = _val(row, "action_date") or ""
+            if desc_latest.get(key, "") > action_date:
+                continue
+            desc_latest[key] = action_date
+            c = contracts[key]
+            c["award_description"] = _val(row, "award_description")
+            c["base_description"]  = _val(row, "prime_award_base_transaction_description")
+            c["txn_description"]   = _val(row, "transaction_description")
+        print(f"{row_count:,} rows")
 
     return contracts
 
