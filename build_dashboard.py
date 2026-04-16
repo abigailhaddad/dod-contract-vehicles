@@ -1,9 +1,12 @@
 """
 build_dashboard.py -- Aggregate DoD contract data and build dashboard JSONs.
 
-Reads data/dod_contracts_bulk.csv (from fetch_awards.py), aggregates
-transaction-level data to one row per contract, computes ceiling remaining
-and active status, and outputs JSON files to web/data/ for the dashboard.
+Streams transaction-level CSV data row by row (no pandas for the 18M+ row
+load), accumulates into dict-based accumulators keyed by contract ID, then
+outputs JSON files to web/data/ for the dashboard.
+
+Memory usage: O(unique contracts) not O(total transactions).
+A GitHub Actions runner with 7GB RAM handles this fine.
 
 Two views:
   1. Contracts -- one row per contract_award_unique_key
@@ -13,35 +16,27 @@ Run:
     python3 build_dashboard.py
 """
 
+import csv
+import io
 import json
-from datetime import datetime
+import sys
+from collections import defaultdict
+from datetime import date, datetime
 from pathlib import Path
 
-import pandas as pd
+csv.field_size_limit(min(sys.maxsize, 2**31 - 1))
 
 BULK_CSV       = Path("data/dod_contracts_bulk.csv")
 CHECKPOINT_DIR = Path("data/bulk_checkpoints")
 SAM_CSV        = Path("data/sam_lookup.csv")
 WEB_DATA_DIR   = Path("web/data")
 
-TODAY = pd.Timestamp.now().normalize()
+TODAY = date.today()
+TODAY_STR = TODAY.isoformat()
 
 # ---------------------------------------------------------------------------
-# Award type labels
+# Labels
 # ---------------------------------------------------------------------------
-
-AWARD_TYPE_LABELS = {
-    "A": "BPA Call",
-    "B": "Purchase Order",
-    "C": "Delivery Order",
-    "D": "Definitive Contract",
-}
-
-IDC_TYPE_LABELS = {
-    "A": "Indefinite Delivery / Requirements",
-    "B": "Indefinite Delivery / Indefinite Quantity",
-    "C": "Indefinite Delivery / Definite Quantity",
-}
 
 PARENT_AWARD_TYPE_LABELS = {
     "IDV_A": "GWAC",
@@ -65,492 +60,429 @@ PRICING_LABELS = {
     "A": "Fixed Price Redetermination",
 }
 
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
-def _best_description(row) -> str | None:
-    """Pick the most informative description from available fields.
+def _val(row: dict, key: str) -> str | None:
+    """Get a non-empty string value from a row, or None."""
+    v = row.get(key, "")
+    if v and str(v).strip() and str(v).strip().lower() not in ("nan", "none", ""):
+        return str(v).strip()
+    return None
 
-    USASpending has three description fields with varying detail:
-      - prime_award_base_transaction_description: original base award text (often best)
-      - award_description: latest transaction description
-      - transaction_description: per-modification description
-    We pick the longest non-null one, since longer = more informative."""
-    candidates = []
-    for col in ["base_description", "award_description", "transaction_description"]:
-        val = row.get(col)
-        if pd.notna(val) and str(val).strip():
-            candidates.append(str(val).strip())
+
+def _float(row: dict, key: str) -> float | None:
+    v = _val(row, key)
+    if v is None:
+        return None
+    try:
+        return float(v)
+    except (ValueError, TypeError):
+        return None
+
+
+def _best_description(award_desc, base_desc, txn_desc) -> str | None:
+    """Pick the longest non-null description."""
+    candidates = [s for s in (base_desc, award_desc, txn_desc) if s]
     if not candidates:
         return None
     return max(candidates, key=len)
 
 
-def _sam_solicitation_url(sol_id) -> str | None:
-    """Build a SAM.gov search URL for a solicitation identifier."""
-    if pd.isna(sol_id) or not str(sol_id).strip():
+def _classify_status(pop_end_str: str | None) -> str:
+    if not pop_end_str:
+        return "Unknown"
+    try:
+        pop_end = datetime.strptime(pop_end_str[:10], "%Y-%m-%d").date()
+    except (ValueError, TypeError):
+        return "Unknown"
+    if pop_end >= TODAY:
+        days_left = (pop_end - TODAY).days
+        if days_left <= 180:
+            return "Expiring Soon"
+        return "Active"
+    return "Expired"
+
+
+def _sam_url(sol_id: str | None) -> str | None:
+    if not sol_id:
         return None
-    return f"https://sam.gov/search/?keywords={str(sol_id).strip()}&index=opp"
+    return f"https://sam.gov/search/?keywords={sol_id}&index=opp"
 
 
-# Only the columns build_dashboard actually needs -- keeps memory manageable
-# when the bulk CSV has ~200 columns and 18M+ rows.
-USE_COLUMNS = [
-    "contract_award_unique_key", "award_id_piid", "parent_award_id_piid",
-    # Dollars
-    "federal_action_obligation", "total_dollars_obligated",
-    "potential_total_value_of_award", "base_and_exercised_options_value",
-    "base_and_all_options_value", "current_total_value_of_award",
-    # Dates
-    "action_date", "period_of_performance_start_date",
-    "period_of_performance_current_end_date", "period_of_performance_potential_end_date",
-    # Agency
-    "awarding_agency_name", "awarding_sub_agency_name",
-    "awarding_office_name", "awarding_office_code",
-    "funding_agency_name", "funding_sub_agency_name", "funding_office_name",
-    # Contractor
-    "recipient_uei", "recipient_name", "recipient_doing_business_as_name",
-    "recipient_parent_name", "cage_code",
-    # Vehicle info
-    "award_type_code", "award_type",
-    "parent_award_type_code", "parent_award_type",
-    "idv_type_code", "type_of_idc_code", "multiple_or_single_award_idv_code",
-    # Scope
-    "award_description", "prime_award_base_transaction_description",
-    "transaction_description", "solicitation_identifier",
-    "naics_code", "naics_description",
-    "product_or_service_code", "product_or_service_code_description",
-    # Competition
-    "extent_competed_code", "type_of_set_aside_code",
-    "type_of_contract_pricing_code", "type_of_contract_pricing",
-    "number_of_offers_received",
-    # Place
-    "primary_place_of_performance_state_code",
-    "primary_place_of_performance_country_code",
-    "primary_place_of_performance_county_name",
-    # Business size
-    "contracting_officers_determination_of_business_size_code",
-    "contracting_officers_determination_of_business_size",
-    # Link
-    "usaspending_permalink",
-]
+# ---------------------------------------------------------------------------
+# Streaming aggregation
+# ---------------------------------------------------------------------------
 
-
-def _find_data_source() -> str | list[Path]:
-    """Find the data to load: merged CSV or checkpoint files."""
+def _data_sources() -> list[Path]:
+    """Find CSV files to read: merged CSV or checkpoint files."""
     if BULK_CSV.exists():
-        return str(BULK_CSV)
-    # Fall back to reading checkpoint files directly (on GitHub Actions,
-    # the merged CSV may not exist if we skipped the merge step)
+        return [BULK_CSV]
     checkpoints = sorted(CHECKPOINT_DIR.glob("FY*.csv"))
-    if checkpoints:
-        return [cp for cp in checkpoints if cp.stat().st_size > 0]
+    sources = [cp for cp in checkpoints if cp.stat().st_size > 0]
+    if sources:
+        return sources
     raise FileNotFoundError("No data found -- run fetch_awards.py first.")
 
 
-def load_and_aggregate() -> pd.DataFrame:
-    """Load bulk data and aggregate to one row per contract."""
-    source = _find_data_source()
+def stream_and_aggregate() -> dict:
+    """Stream all transaction rows, accumulate one entry per contract_award_unique_key.
 
-    # Only read the columns we need -- cuts memory ~75% vs reading all 200
-    print("Loading bulk data...")
-    if isinstance(source, str):
-        df = pd.read_csv(source, low_memory=False, dtype={"naics_code": str},
-                         usecols=lambda c: c in USE_COLUMNS)
-    else:
-        print(f"  Reading from {len(source)} checkpoint files...")
-        frames = []
-        for cp in source:
-            chunk = pd.read_csv(cp, low_memory=False, dtype={"naics_code": str},
-                                usecols=lambda c: c in USE_COLUMNS)
-            frames.append(chunk)
-            print(f"    {cp.name}: {len(chunk):,} rows")
-        df = pd.concat(frames, ignore_index=True)
-        del frames
+    For each contract, we keep the latest transaction's values (by action_date).
+    federal_action_obligation is summed across all transactions.
+    Memory: ~2-4KB per unique contract, ~500K-1M contracts = ~2-4GB peak.
+    """
+    sources = _data_sources()
+    print(f"Reading from {len(sources)} file(s)...")
 
-    print(f"  {len(df):,} transaction rows, {len(df.columns)} columns")
+    # contracts[key] = {field: value, ...} — latest transaction wins
+    contracts = {}
+    # Track sum of federal_action_obligation per contract (it's per-transaction)
+    fao_sums = defaultdict(float)
 
-    # Ensure optional columns exist
-    for col in USE_COLUMNS:
-        if col not in df.columns:
-            df[col] = None
+    total_rows = 0
+    for src in sources:
+        print(f"  Streaming {src.name}...", end=" ", flush=True)
+        file_rows = 0
+        with open(src, newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                total_rows += 1
+                file_rows += 1
+                if total_rows % 2_000_000 == 0:
+                    print(f"{total_rows // 1_000_000}M...", end=" ", flush=True)
 
-    # Parse dates and sort
-    df["action_date"] = pd.to_datetime(df["action_date"], errors="coerce")
-    df = df.sort_values("action_date")
+                key = _val(row, "contract_award_unique_key")
+                if not key:
+                    continue
 
-    # Aggregate to contract level
-    print("Aggregating to contract level...")
-    agg = df.groupby("contract_award_unique_key").agg(
-        piid=("award_id_piid", "last"),
-        parent_piid=("parent_award_id_piid", "last"),
-        award_date=("action_date", "max"),
+                action_date = _val(row, "action_date") or ""
 
-        # Dollars -- cumulative fields take "last" (latest transaction)
-        obligated=("total_dollars_obligated", "last"),
-        federal_action_obligation=("federal_action_obligation", "sum"),
-        ceiling=("potential_total_value_of_award", "last"),
-        base_exercised=("base_and_exercised_options_value", "last"),
-        base_all_options=("base_and_all_options_value", "last"),
-        current_value=("current_total_value_of_award", "last"),
+                # Sum federal_action_obligation across all mods
+                fao = _float(row, "federal_action_obligation")
+                if fao:
+                    fao_sums[key] += fao
 
-        # Dates
-        pop_start=("period_of_performance_start_date", "first"),
-        pop_end=("period_of_performance_current_end_date", "last"),
-        pop_potential_end=("period_of_performance_potential_end_date", "last"),
+                # Keep latest transaction (by action_date string comparison)
+                existing = contracts.get(key)
+                if existing and existing.get("_action_date", "") > action_date:
+                    continue  # existing is newer, skip this row
 
-        # Agency
-        department=("awarding_agency_name", "last"),
-        sub_agency=("awarding_sub_agency_name", "last"),
-        awarding_office=("awarding_office_name", "last"),
-        awarding_office_code=("awarding_office_code", "last"),
-        funding_agency=("funding_agency_name", "last"),
-        funding_sub_agency=("funding_sub_agency_name", "last"),
-        funding_office=("funding_office_name", "last"),
+                # Store only the fields we need
+                contracts[key] = {
+                    "_action_date":       action_date,
+                    "key":                key,
+                    "piid":               _val(row, "award_id_piid"),
+                    "parent_piid":        _val(row, "parent_award_id_piid"),
+                    # Dollars (cumulative — take latest)
+                    "obligated":          _float(row, "total_dollars_obligated"),
+                    "ceiling":            _float(row, "potential_total_value_of_award"),
+                    # Dates
+                    "pop_start":          _val(row, "period_of_performance_start_date"),
+                    "pop_end":            _val(row, "period_of_performance_current_end_date"),
+                    "pop_potential_end":  _val(row, "period_of_performance_potential_end_date"),
+                    # Agency
+                    "department":         _val(row, "awarding_agency_name"),
+                    "sub_agency":         _val(row, "awarding_sub_agency_name"),
+                    "awarding_office":    _val(row, "awarding_office_name"),
+                    "funding_office":     _val(row, "funding_office_name"),
+                    # Contractor
+                    "recipient_uei":      _val(row, "recipient_uei"),
+                    "recipient_name":     _val(row, "recipient_name"),
+                    "recipient_parent":   _val(row, "recipient_parent_name"),
+                    # Vehicle
+                    "parent_award_type_code": _val(row, "parent_award_type_code"),
+                    "parent_award_type":  _val(row, "parent_award_type"),
+                    # Scope
+                    "award_description":  _val(row, "award_description"),
+                    "base_description":   _val(row, "prime_award_base_transaction_description"),
+                    "txn_description":    _val(row, "transaction_description"),
+                    "naics_code":         _val(row, "naics_code"),
+                    "naics_description":  _val(row, "naics_description"),
+                    "psc_code":           _val(row, "product_or_service_code"),
+                    "psc_description":    _val(row, "product_or_service_code_description"),
+                    "solicitation_id":    _val(row, "solicitation_identifier"),
+                    # Competition
+                    "set_aside":          _val(row, "type_of_set_aside_code") or "NONE",
+                    "pricing_type":       _val(row, "type_of_contract_pricing_code"),
+                    "pricing_label":      _val(row, "type_of_contract_pricing"),
+                    "num_offers":         _val(row, "number_of_offers_received"),
+                    # Place
+                    "place_state":        _val(row, "primary_place_of_performance_state_code"),
+                    # Business size
+                    "business_size_label": _val(row, "contracting_officers_determination_of_business_size"),
+                    # Link
+                    "usaspending_link":   _val(row, "usaspending_permalink"),
+                }
 
-        # Contractor
-        recipient_uei=("recipient_uei", "last"),
-        recipient_name=("recipient_name", "last"),
-        recipient_dba=("recipient_doing_business_as_name", "last"),
-        recipient_parent_name=("recipient_parent_name", "last"),
-        cage_code=("cage_code", "last"),
+        print(f"{file_rows:,} rows")
 
-        # Vehicle info
-        award_type_code=("award_type_code", "last"),
-        award_type=("award_type", "last"),
-        parent_award_type_code=("parent_award_type_code", "last"),
-        parent_award_type=("parent_award_type", "last"),
-        idv_type_code=("idv_type_code", "last"),
-        idc_type_code=("type_of_idc_code", "last"),
-        multi_single=("multiple_or_single_award_idv_code", "last"),
+    print(f"  Total: {total_rows:,} transactions -> {len(contracts):,} unique contracts")
 
-        # Scope -- multiple description fields, often different levels of detail
-        award_description=("award_description", "last"),
-        base_description=("prime_award_base_transaction_description", "last"),
-        transaction_description=("transaction_description", "last"),
-        naics_code=("naics_code", "last"),
-        naics_description=("naics_description", "last"),
-        psc_code=("product_or_service_code", "last"),
-        psc_description=("product_or_service_code_description", "last"),
-        solicitation_id=("solicitation_identifier", "last"),
+    # Apply fao fallback for contracts missing total_dollars_obligated
+    for key, c in contracts.items():
+        if not c["obligated"] or c["obligated"] == 0:
+            c["obligated"] = fao_sums.get(key)
 
-        # Competition
-        extent_competed=("extent_competed_code", "last"),
-        set_aside=("type_of_set_aside_code", "last"),
-        pricing_type=("type_of_contract_pricing_code", "last"),
-        pricing_label=("type_of_contract_pricing", "last"),
-        num_offers=("number_of_offers_received", "last"),
-
-        # Place
-        place_state=("primary_place_of_performance_state_code", "last"),
-        place_country=("primary_place_of_performance_country_code", "last"),
-        place_county=("primary_place_of_performance_county_name", "last"),
-
-        # Business size
-        business_size=("contracting_officers_determination_of_business_size_code", "last"),
-        business_size_label=("contracting_officers_determination_of_business_size", "last"),
-
-        # Link
-        usaspending_link=("usaspending_permalink", "last"),
-
-        num_transactions=("contract_award_unique_key", "count"),
-    ).reset_index()
-
-    agg = agg.rename(columns={"contract_award_unique_key": "key"})
-
-    # Numeric cleanup
-    for col in ["obligated", "ceiling", "base_exercised", "base_all_options",
-                "current_value", "federal_action_obligation"]:
-        agg[col] = pd.to_numeric(agg[col], errors="coerce")
-
-    # Use total_dollars_obligated, fall back to summed actions
-    mask = agg["obligated"].isna() | (agg["obligated"] == 0)
-    agg.loc[mask, "obligated"] = agg.loc[mask, "federal_action_obligation"]
-
-    # Parse dates
-    for col in ["pop_start", "pop_end", "pop_potential_end"]:
-        agg[col] = pd.to_datetime(agg[col], errors="coerce")
-
-    # --- Derived fields ---
-
-    # Best description: pick the longest of the three description fields
-    agg["best_description"] = agg.apply(_best_description, axis=1)
-
-    # SAM.gov solicitation link (for full scope/SOW documents)
-    agg["sam_solicitation_url"] = agg["solicitation_id"].apply(_sam_solicitation_url)
-
-    # Ceiling remaining
-    agg["ceiling_remaining"] = agg["ceiling"] - agg["obligated"]
-
-    # Active status
-    agg["is_active"] = agg["pop_end"] >= TODAY
-    agg["is_potentially_active"] = agg["pop_potential_end"] >= TODAY
-    agg["days_until_expiry"] = (agg["pop_end"] - TODAY).dt.days
-
-    def classify_status(row):
-        if pd.isna(row["pop_end"]):
-            return "Unknown"
-        if row["pop_end"] >= TODAY:
-            if row["days_until_expiry"] <= 180:
-                return "Expiring Soon"
-            return "Active"
-        return "Expired"
-
-    agg["status"] = agg.apply(classify_status, axis=1)
-
-    # Has parent vehicle?
-    agg["has_parent_vehicle"] = agg["parent_piid"].notna() & (agg["parent_piid"] != "")
-
-    # Vehicle type label
-    agg["vehicle_type"] = agg["parent_award_type_code"].map(PARENT_AWARD_TYPE_LABELS).fillna("Standalone")
-    agg["pricing_type_label"] = agg["pricing_type"].map(PRICING_LABELS).fillna(agg["pricing_label"])
-
-    # Set aside cleanup
-    agg["set_aside"] = agg["set_aside"].fillna("NONE").replace("", "NONE")
-
-    # --- SAM enrichment (optional) ---
-    if SAM_CSV.exists():
-        print("Joining SAM entity data...")
-        sam = pd.read_csv(SAM_CSV)
-        sam["entity_start_date"] = pd.to_datetime(sam["entity_start_date"], errors="coerce")
-        sam["sam_registration_date"] = pd.to_datetime(sam["sam_registration_date"], errors="coerce")
-
-        merge_cols = ["uei", "legal_business_name", "sam_registration_date",
-                      "entity_start_date", "city", "state"]
-        available = [c for c in merge_cols if c in sam.columns]
-        agg = agg.merge(sam[available], left_on="recipient_uei", right_on="uei", how="left")
-
-        matched = agg["uei"].notna().sum()
-        print(f"  SAM match: {matched:,} / {len(agg):,} contracts ({matched/len(agg)*100:.1f}%)")
-
-        # Contractor location from SAM (distinct from place of performance)
-        agg["contractor_city"] = agg.get("city")
-        agg["contractor_state"] = agg.get("state")
-    else:
-        print("  No SAM data -- run enrich_sam.py for contractor details")
-        agg["contractor_city"] = None
-        agg["contractor_state"] = None
-
-    print(f"  {len(agg):,} unique contracts")
-    print(f"  Active: {(agg['status'] == 'Active').sum():,}")
-    print(f"  Expiring Soon: {(agg['status'] == 'Expiring Soon').sum():,}")
-    print(f"  Expired: {(agg['status'] == 'Expired').sum():,}")
-
-    return agg
+    return contracts
 
 
-def build_vehicle_rollup(df: pd.DataFrame) -> pd.DataFrame:
-    """Group contracts by parent vehicle PIID for a vehicle-level view."""
-    # Only contracts that have a parent vehicle
-    has_parent = df[df["has_parent_vehicle"]].copy()
-    if has_parent.empty:
-        return pd.DataFrame()
+# ---------------------------------------------------------------------------
+# Derived fields + JSON builders
+# ---------------------------------------------------------------------------
 
-    print("Building vehicle rollup...")
-    vehicles = has_parent.groupby("parent_piid").agg(
-        order_count=("key", "count"),
-        total_obligated=("obligated", "sum"),
-        total_ceiling=("ceiling", "sum"),
+def enrich_contracts(contracts: dict) -> dict:
+    """Add derived fields to each contract dict."""
+    cutoff = date(TODAY.year - 1, TODAY.month, TODAY.day)
+    cutoff_str = cutoff.isoformat()
 
-        # Take the most common values
-        department=("department", lambda x: x.mode().iloc[0] if len(x.mode()) > 0 else None),
-        sub_agency=("sub_agency", lambda x: x.mode().iloc[0] if len(x.mode()) > 0 else None),
-        awarding_office=("awarding_office", lambda x: x.mode().iloc[0] if len(x.mode()) > 0 else None),
-        vehicle_type=("vehicle_type", "first"),
-        parent_award_type=("parent_award_type", "first"),
+    for c in contracts.values():
+        # Ceiling remaining
+        ceiling = c.get("ceiling")
+        obligated = c.get("obligated")
+        if ceiling is not None and obligated is not None:
+            c["ceiling_remaining"] = ceiling - obligated
+        else:
+            c["ceiling_remaining"] = None
 
-        # Contractors on this vehicle
-        contractors=("recipient_name", lambda x: list(x.dropna().unique())),
-        contractor_count=("recipient_name", "nunique"),
+        # Status
+        c["status"] = _classify_status(c.get("pop_end"))
 
-        # Scope -- collect unique NAICS and descriptions
-        naics_codes=("naics_code", lambda x: list(x.dropna().unique())),
-        naics_descriptions=("naics_description", lambda x: list(x.dropna().unique())),
-        descriptions=("award_description", lambda x: list(x.dropna().unique())[:5]),
+        # Vehicle type
+        c["vehicle_type"] = PARENT_AWARD_TYPE_LABELS.get(
+            c.get("parent_award_type_code") or "", "Standalone"
+        )
 
-        # Date range
-        earliest_start=("pop_start", "min"),
-        latest_end=("pop_end", "max"),
-        latest_potential_end=("pop_potential_end", "max"),
+        # Pricing label
+        c["pricing_type_label"] = PRICING_LABELS.get(
+            c.get("pricing_type") or "", c.get("pricing_label")
+        )
 
-        # Place -- collect unique states
-        states=("place_state", lambda x: list(x.dropna().unique())),
+        # Best description
+        c["description"] = _best_description(
+            c.get("award_description"),
+            c.get("base_description"),
+            c.get("txn_description"),
+        )
 
-        # Active orders
-        active_orders=("is_active", "sum"),
-    ).reset_index()
+        # SAM solicitation URL
+        c["sam_url"] = _sam_url(c.get("solicitation_id"))
 
-    vehicles["ceiling_remaining"] = vehicles["total_ceiling"] - vehicles["total_obligated"]
-    vehicles["is_active"] = vehicles["latest_end"] >= TODAY
-    vehicles["pct_ceiling_used"] = (
-        (vehicles["total_obligated"] / vehicles["total_ceiling"] * 100)
-        .where(vehicles["total_ceiling"] > 0)
-        .round(1)
-    )
+        # Has parent vehicle
+        c["has_parent"] = bool(c.get("parent_piid"))
 
-    def classify_vehicle_status(row):
-        if pd.isna(row["latest_end"]):
-            return "Unknown"
-        if row["latest_end"] >= TODAY:
-            days_left = (row["latest_end"] - TODAY).days
-            if days_left <= 180:
-                return "Expiring Soon"
-            return "Active"
-        return "Expired"
-
-    vehicles["status"] = vehicles.apply(classify_vehicle_status, axis=1)
-
-    print(f"  {len(vehicles):,} unique parent vehicles")
-    print(f"  Active: {(vehicles['status'] == 'Active').sum():,}")
-
-    return vehicles
+    return contracts
 
 
-def build_contracts_json(df: pd.DataFrame) -> list:
-    """Build the contracts table JSON for the dashboard.
-    Includes active + expiring + recently expired (last 12 months)."""
-    cutoff = TODAY - pd.Timedelta(days=365)
-    recent = df[
-        (df["status"].isin(["Active", "Expiring Soon"])) |
-        ((df["status"] == "Expired") & (df["pop_end"] >= cutoff)) |
-        (df["status"] == "Unknown")
-    ].copy()
+def build_contracts_json(contracts: dict) -> list:
+    """Build JSON for active + expiring + recently expired contracts."""
+    cutoff = date(TODAY.year - 1, TODAY.month, TODAY.day).isoformat()
 
-    # Sort: active first, then by ceiling remaining descending
+    records = []
+    for c in contracts.values():
+        status = c["status"]
+        # Include active, expiring, unknown, and recently expired
+        if status == "Expired":
+            pop_end = (c.get("pop_end") or "")[:10]
+            if pop_end < cutoff:
+                continue
+        records.append({
+            "key":                c["key"],
+            "piid":               c.get("piid"),
+            "parent_piid":        c.get("parent_piid"),
+            "contractor":         c.get("recipient_name"),
+            "contractor_parent":  c.get("recipient_parent"),
+            "department":         c.get("department"),
+            "sub_agency":         c.get("sub_agency"),
+            "awarding_office":    c.get("awarding_office"),
+            "funding_office":     c.get("funding_office"),
+            "description":        c.get("description"),
+            "solicitation_id":    c.get("solicitation_id"),
+            "sam_url":            c.get("sam_url"),
+            "naics":              c.get("naics_code"),
+            "naics_desc":         c.get("naics_description"),
+            "psc":                c.get("psc_code"),
+            "psc_desc":           c.get("psc_description"),
+            "pricing":            c.get("pricing_type_label"),
+            "vehicle_type":       c.get("vehicle_type"),
+            "set_aside":          c.get("set_aside"),
+            "business_size":      c.get("business_size_label"),
+            "status":             status,
+            "pop_start":          (c.get("pop_start") or "")[:10] or None,
+            "pop_end":            (c.get("pop_end") or "")[:10] or None,
+            "pop_potential_end":  (c.get("pop_potential_end") or "")[:10] or None,
+            "ceiling":            round(c["ceiling"]) if c.get("ceiling") else None,
+            "obligated":          round(c["obligated"]) if c.get("obligated") else None,
+            "ceiling_remaining":  round(c["ceiling_remaining"]) if c.get("ceiling_remaining") is not None else None,
+            "place_state":        c.get("place_state"),
+            "link":               c.get("usaspending_link"),
+        })
+
+    # Sort: active first, then by ceiling remaining desc
     status_order = {"Active": 0, "Expiring Soon": 1, "Unknown": 2, "Expired": 3}
-    recent["_sort"] = recent["status"].map(status_order)
-    recent = recent.sort_values(["_sort", "ceiling_remaining"], ascending=[True, False])
-
-    records = []
-    for _, r in recent.iterrows():
-        records.append({
-            "key":                  r["key"],
-            "piid":                 r["piid"],
-            "parent_piid":          r["parent_piid"] if pd.notna(r["parent_piid"]) else None,
-            "contractor":           r["recipient_name"],
-            "contractor_parent":    r["recipient_parent_name"] if pd.notna(r["recipient_parent_name"]) else None,
-            "department":           r["department"],
-            "sub_agency":           r["sub_agency"],
-            "awarding_office":      r["awarding_office"],
-            "funding_office":       r["funding_office"] if pd.notna(r.get("funding_office")) else None,
-            "description":          r["best_description"] if pd.notna(r.get("best_description")) else (r["award_description"] if pd.notna(r["award_description"]) else None),
-            "solicitation_id":      r["solicitation_id"] if pd.notna(r.get("solicitation_id")) else None,
-            "sam_url":              r["sam_solicitation_url"] if pd.notna(r.get("sam_solicitation_url")) else None,
-            "naics":                r["naics_code"] if pd.notna(r["naics_code"]) else None,
-            "naics_desc":           r["naics_description"] if pd.notna(r["naics_description"]) else None,
-            "psc":                  r["psc_code"] if pd.notna(r["psc_code"]) else None,
-            "psc_desc":             r["psc_description"] if pd.notna(r["psc_description"]) else None,
-            "pricing":              r["pricing_type_label"] if pd.notna(r["pricing_type_label"]) else None,
-            "vehicle_type":         r["vehicle_type"],
-            "set_aside":            r["set_aside"],
-            "business_size":        r["business_size_label"] if pd.notna(r["business_size_label"]) else None,
-            "status":               r["status"],
-            "pop_start":            r["pop_start"].strftime("%Y-%m-%d") if pd.notna(r["pop_start"]) else None,
-            "pop_end":              r["pop_end"].strftime("%Y-%m-%d") if pd.notna(r["pop_end"]) else None,
-            "pop_potential_end":    r["pop_potential_end"].strftime("%Y-%m-%d") if pd.notna(r["pop_potential_end"]) else None,
-            "ceiling":              round(r["ceiling"]) if pd.notna(r["ceiling"]) else None,
-            "obligated":            round(r["obligated"]) if pd.notna(r["obligated"]) else None,
-            "ceiling_remaining":    round(r["ceiling_remaining"]) if pd.notna(r["ceiling_remaining"]) else None,
-            "num_offers":           int(r["num_offers"]) if pd.notna(r.get("num_offers")) else None,
-            "place_state":          r["place_state"] if pd.notna(r["place_state"]) else None,
-            "contractor_city":      r["contractor_city"] if pd.notna(r.get("contractor_city")) else None,
-            "contractor_state":     r["contractor_state"] if pd.notna(r.get("contractor_state")) else None,
-            "link":                 r["usaspending_link"] if pd.notna(r["usaspending_link"]) else None,
-        })
+    records.sort(key=lambda r: (status_order.get(r["status"], 9), -(r["ceiling_remaining"] or 0)))
 
     return records
 
 
-def build_vehicles_json(vehicles: pd.DataFrame) -> list:
-    """Build the vehicle rollup JSON."""
-    if vehicles.empty:
-        return []
+def build_vehicles_json(contracts: dict) -> list:
+    """Group contracts by parent PIID for vehicle-level rollup."""
+    vehicles = defaultdict(lambda: {
+        "order_count": 0, "active_orders": 0,
+        "total_obligated": 0.0, "total_ceiling": 0.0,
+        "contractors": set(), "naics_codes": set(),
+        "naics_descriptions": set(), "descriptions": set(),
+        "states": set(),
+        "department": None, "sub_agency": None, "awarding_office": None,
+        "vehicle_type": None, "parent_award_type": None,
+        "earliest_start": None, "latest_end": None, "latest_potential_end": None,
+    })
 
-    # Active + expiring + recently expired
-    cutoff = TODAY - pd.Timedelta(days=365)
-    recent = vehicles[
-        (vehicles["status"].isin(["Active", "Expiring Soon"])) |
-        ((vehicles["status"] == "Expired") & (vehicles["latest_end"] >= cutoff)) |
-        (vehicles["status"] == "Unknown")
-    ].copy()
+    for c in contracts.values():
+        parent = c.get("parent_piid")
+        if not parent:
+            continue
 
-    recent = recent.sort_values("total_ceiling", ascending=False)
+        v = vehicles[parent]
+        v["order_count"] += 1
+        if c["status"] in ("Active", "Expiring Soon"):
+            v["active_orders"] += 1
+        v["total_obligated"] += c.get("obligated") or 0
+        v["total_ceiling"] += c.get("ceiling") or 0
 
+        if c.get("recipient_name"):
+            v["contractors"].add(c["recipient_name"])
+        if c.get("naics_code"):
+            v["naics_codes"].add(c["naics_code"])
+        if c.get("naics_description"):
+            v["naics_descriptions"].add(c["naics_description"])
+        if c.get("award_description"):
+            v["descriptions"].add(c["award_description"])
+        if c.get("place_state"):
+            v["states"].add(c["place_state"])
+
+        # Take first non-null for categorical fields
+        for field in ("department", "sub_agency", "awarding_office",
+                      "vehicle_type", "parent_award_type"):
+            if not v[field] and c.get(field):
+                v[field] = c[field]
+
+        # Date ranges
+        ps = (c.get("pop_start") or "")[:10]
+        pe = (c.get("pop_end") or "")[:10]
+        ppe = (c.get("pop_potential_end") or "")[:10]
+        if ps and (not v["earliest_start"] or ps < v["earliest_start"]):
+            v["earliest_start"] = ps
+        if pe and (not v["latest_end"] or pe > v["latest_end"]):
+            v["latest_end"] = pe
+        if ppe and (not v["latest_potential_end"] or ppe > v["latest_potential_end"]):
+            v["latest_potential_end"] = ppe
+
+    # Build JSON records
+    cutoff = date(TODAY.year - 1, TODAY.month, TODAY.day).isoformat()
     records = []
-    for _, r in recent.iterrows():
+    for parent_piid, v in vehicles.items():
+        status = _classify_status(v["latest_end"])
+        if status == "Expired" and (v["latest_end"] or "") < cutoff:
+            continue
+
+        remaining = v["total_ceiling"] - v["total_obligated"]
+        pct_used = round(v["total_obligated"] / v["total_ceiling"] * 100, 1) if v["total_ceiling"] > 0 else None
+
         records.append({
-            "parent_piid":          r["parent_piid"],
-            "vehicle_type":         r["vehicle_type"],
-            "parent_award_type":    r["parent_award_type"] if pd.notna(r["parent_award_type"]) else None,
-            "department":           r["department"],
-            "sub_agency":           r["sub_agency"],
-            "awarding_office":      r["awarding_office"],
-            "order_count":          int(r["order_count"]),
-            "active_orders":        int(r["active_orders"]),
-            "contractor_count":     int(r["contractor_count"]),
-            "contractors":          r["contractors"][:10],  # Cap at 10 for JSON size
-            "naics_codes":          r["naics_codes"][:10],
-            "naics_descriptions":   r["naics_descriptions"][:5],
-            "descriptions":         r["descriptions"],
-            "status":               r["status"],
-            "earliest_start":       r["earliest_start"].strftime("%Y-%m-%d") if pd.notna(r["earliest_start"]) else None,
-            "latest_end":           r["latest_end"].strftime("%Y-%m-%d") if pd.notna(r["latest_end"]) else None,
-            "latest_potential_end": r["latest_potential_end"].strftime("%Y-%m-%d") if pd.notna(r["latest_potential_end"]) else None,
-            "total_ceiling":        round(r["total_ceiling"]) if pd.notna(r["total_ceiling"]) else None,
-            "total_obligated":      round(r["total_obligated"]) if pd.notna(r["total_obligated"]) else None,
-            "ceiling_remaining":    round(r["ceiling_remaining"]) if pd.notna(r["ceiling_remaining"]) else None,
-            "pct_ceiling_used":     r["pct_ceiling_used"] if pd.notna(r["pct_ceiling_used"]) else None,
-            "states":               r["states"][:10],
+            "parent_piid":        parent_piid,
+            "vehicle_type":       v["vehicle_type"],
+            "parent_award_type":  v["parent_award_type"],
+            "department":         v["department"],
+            "sub_agency":         v["sub_agency"],
+            "awarding_office":    v["awarding_office"],
+            "order_count":        v["order_count"],
+            "active_orders":      v["active_orders"],
+            "contractor_count":   len(v["contractors"]),
+            "contractors":        sorted(v["contractors"])[:10],
+            "naics_codes":        sorted(v["naics_codes"])[:10],
+            "naics_descriptions": sorted(v["naics_descriptions"])[:5],
+            "descriptions":       sorted(v["descriptions"])[:5],
+            "status":             status,
+            "earliest_start":     v["earliest_start"],
+            "latest_end":         v["latest_end"],
+            "latest_potential_end": v["latest_potential_end"],
+            "total_ceiling":      round(v["total_ceiling"]) if v["total_ceiling"] else None,
+            "total_obligated":    round(v["total_obligated"]) if v["total_obligated"] else None,
+            "ceiling_remaining":  round(remaining),
+            "pct_ceiling_used":   pct_used,
+            "states":             sorted(v["states"])[:10],
         })
 
+    records.sort(key=lambda r: -(r["ceiling_remaining"] or 0))
     return records
 
 
-def build_summary(df: pd.DataFrame, vehicles: pd.DataFrame) -> dict:
-    """Summary stats for the dashboard header."""
-    active = df[df["status"] == "Active"]
-    expiring = df[df["status"] == "Expiring Soon"]
+def build_summary(contracts: dict, vehicles_json: list) -> dict:
+    active_count = sum(1 for c in contracts.values() if c["status"] == "Active")
+    expiring_count = sum(1 for c in contracts.values() if c["status"] == "Expiring Soon")
+    active_ceiling = sum(c.get("ceiling") or 0 for c in contracts.values() if c["status"] == "Active")
+    active_obligated = sum(c.get("obligated") or 0 for c in contracts.values() if c["status"] == "Active")
+    active_remaining = active_ceiling - active_obligated
+    active_contractors = len(set(
+        c.get("recipient_name") for c in contracts.values()
+        if c["status"] == "Active" and c.get("recipient_name")
+    ))
+    active_offices = len(set(
+        c.get("awarding_office") for c in contracts.values()
+        if c["status"] == "Active" and c.get("awarding_office")
+    ))
+    active_vehicles = sum(1 for v in vehicles_json if v["status"] in ("Active", "Expiring Soon"))
 
     return {
-        "total_contracts":      int(len(df)),
-        "active_contracts":     int(len(active)),
-        "expiring_soon":        int(len(expiring)),
-        "total_ceiling_b":      round(active["ceiling"].sum() / 1e9, 1),
-        "total_obligated_b":    round(active["obligated"].sum() / 1e9, 1),
-        "ceiling_remaining_b":  round(active["ceiling_remaining"].sum() / 1e9, 1),
-        "unique_contractors":   int(active["recipient_name"].nunique()),
-        "unique_vehicles":      int(len(vehicles[vehicles["status"].isin(["Active", "Expiring Soon"])])) if not vehicles.empty else 0,
-        "unique_offices":       int(active["awarding_office"].nunique()),
-        "as_of":                TODAY.strftime("%Y-%m-%d"),
+        "total_contracts":      len(contracts),
+        "active_contracts":     active_count,
+        "expiring_soon":        expiring_count,
+        "total_ceiling_b":      round(active_ceiling / 1e9, 1),
+        "total_obligated_b":    round(active_obligated / 1e9, 1),
+        "ceiling_remaining_b":  round(active_remaining / 1e9, 1),
+        "unique_contractors":   active_contractors,
+        "unique_vehicles":      active_vehicles,
+        "unique_offices":       active_offices,
+        "as_of":                TODAY_STR,
     }
 
 
-def build_filter_options(df: pd.DataFrame) -> dict:
-    """Build filter option lists for the dashboard dropdowns."""
-    active = df[df["status"].isin(["Active", "Expiring Soon", "Unknown"])]
+def build_filter_options(contracts: dict) -> dict:
+    active = [c for c in contracts.values() if c["status"] in ("Active", "Expiring Soon", "Unknown")]
 
-    def top_values(series, n=50):
-        return sorted(series.dropna().unique().tolist())[:n]
+    def unique_sorted(field, n=50):
+        vals = sorted(set(c.get(field) for c in active if c.get(field)))
+        return vals[:n]
+
+    naics_2 = sorted(set(
+        c.get("naics_code", "")[:2]
+        for c in active
+        if c.get("naics_code") and len(c["naics_code"]) >= 2
+    ))
 
     return {
-        "statuses":         ["Active", "Expiring Soon", "Expired", "Unknown"],
-        "departments":      top_values(active["department"]),
-        "sub_agencies":     top_values(active["sub_agency"]),
-        "vehicle_types":    top_values(active["vehicle_type"]),
-        "pricing_types":    top_values(active["pricing_type_label"]),
-        "naics_2digit":     sorted(active["naics_code"].dropna().str[:2].unique().tolist()),
-        "states":           top_values(active["place_state"]),
+        "statuses":       ["Active", "Expiring Soon", "Expired", "Unknown"],
+        "departments":    unique_sorted("department"),
+        "sub_agencies":   unique_sorted("sub_agency"),
+        "vehicle_types":  unique_sorted("vehicle_type"),
+        "pricing_types":  unique_sorted("pricing_type_label"),
+        "naics_2digit":   naics_2,
+        "states":         unique_sorted("place_state"),
     }
 
 
 def main():
     if not BULK_CSV.exists() and not list(CHECKPOINT_DIR.glob("FY*.csv")):
-        print(f"No data found -- run fetch_awards.py first.")
+        print("No data found -- run fetch_awards.py first.")
         return
 
     WEB_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Load and aggregate
-    contracts = load_and_aggregate()
-    vehicles = build_vehicle_rollup(contracts)
+    # Stream and aggregate (no pandas, constant memory per row)
+    contracts = stream_and_aggregate()
+    contracts = enrich_contracts(contracts)
 
     # Build JSONs
     print("\nBuilding dashboard JSONs...")
@@ -558,10 +490,10 @@ def main():
     contracts_json = build_contracts_json(contracts)
     print(f"  contracts.json: {len(contracts_json):,} records")
 
-    vehicles_json = build_vehicles_json(vehicles)
+    vehicles_json = build_vehicles_json(contracts)
     print(f"  vehicles.json: {len(vehicles_json):,} records")
 
-    summary = build_summary(contracts, vehicles)
+    summary = build_summary(contracts, vehicles_json)
     print(f"  summary.json: {summary['active_contracts']:,} active, "
           f"${summary['ceiling_remaining_b']}B remaining")
 

@@ -41,7 +41,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: pip install requests boto3 pandas
+        run: pip install requests boto3
 
       - name: Download checkpoints from R2
         run: |
