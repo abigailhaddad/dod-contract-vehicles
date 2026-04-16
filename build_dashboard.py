@@ -19,9 +19,10 @@ from pathlib import Path
 
 import pandas as pd
 
-BULK_CSV     = Path("data/dod_contracts_bulk.csv")
-SAM_CSV      = Path("data/sam_lookup.csv")
-WEB_DATA_DIR = Path("web/data")
+BULK_CSV       = Path("data/dod_contracts_bulk.csv")
+CHECKPOINT_DIR = Path("data/bulk_checkpoints")
+SAM_CSV        = Path("data/sam_lookup.csv")
+WEB_DATA_DIR   = Path("web/data")
 
 TODAY = pd.Timestamp.now().normalize()
 
@@ -90,16 +91,85 @@ def _sam_solicitation_url(sol_id) -> str | None:
     return f"https://sam.gov/search/?keywords={str(sol_id).strip()}&index=opp"
 
 
+# Only the columns build_dashboard actually needs -- keeps memory manageable
+# when the bulk CSV has ~200 columns and 18M+ rows.
+USE_COLUMNS = [
+    "contract_award_unique_key", "award_id_piid", "parent_award_id_piid",
+    # Dollars
+    "federal_action_obligation", "total_dollars_obligated",
+    "potential_total_value_of_award", "base_and_exercised_options_value",
+    "base_and_all_options_value", "current_total_value_of_award",
+    # Dates
+    "action_date", "period_of_performance_start_date",
+    "period_of_performance_current_end_date", "period_of_performance_potential_end_date",
+    # Agency
+    "awarding_agency_name", "awarding_sub_agency_name",
+    "awarding_office_name", "awarding_office_code",
+    "funding_agency_name", "funding_sub_agency_name", "funding_office_name",
+    # Contractor
+    "recipient_uei", "recipient_name", "recipient_doing_business_as_name",
+    "recipient_parent_name", "cage_code",
+    # Vehicle info
+    "award_type_code", "award_type",
+    "parent_award_type_code", "parent_award_type",
+    "idv_type_code", "type_of_idc_code", "multiple_or_single_award_idv_code",
+    # Scope
+    "award_description", "prime_award_base_transaction_description",
+    "transaction_description", "solicitation_identifier",
+    "naics_code", "naics_description",
+    "product_or_service_code", "product_or_service_code_description",
+    # Competition
+    "extent_competed_code", "type_of_set_aside_code",
+    "type_of_contract_pricing_code", "type_of_contract_pricing",
+    "number_of_offers_received",
+    # Place
+    "primary_place_of_performance_state_code",
+    "primary_place_of_performance_country_code",
+    "primary_place_of_performance_county_name",
+    # Business size
+    "contracting_officers_determination_of_business_size_code",
+    "contracting_officers_determination_of_business_size",
+    # Link
+    "usaspending_permalink",
+]
+
+
+def _find_data_source() -> str | list[Path]:
+    """Find the data to load: merged CSV or checkpoint files."""
+    if BULK_CSV.exists():
+        return str(BULK_CSV)
+    # Fall back to reading checkpoint files directly (on GitHub Actions,
+    # the merged CSV may not exist if we skipped the merge step)
+    checkpoints = sorted(CHECKPOINT_DIR.glob("FY*.csv"))
+    if checkpoints:
+        return [cp for cp in checkpoints if cp.stat().st_size > 0]
+    raise FileNotFoundError("No data found -- run fetch_awards.py first.")
+
+
 def load_and_aggregate() -> pd.DataFrame:
     """Load bulk data and aggregate to one row per contract."""
-    print("Loading bulk data...")
-    df = pd.read_csv(BULK_CSV, low_memory=False, dtype={"naics_code": str})
-    print(f"  {len(df):,} transaction rows")
+    source = _find_data_source()
 
-    # Ensure optional description columns exist (they should with all-column fetch,
-    # but guard against older checkpoint data that might lack them)
-    for col in ["prime_award_base_transaction_description", "transaction_description",
-                "solicitation_identifier"]:
+    # Only read the columns we need -- cuts memory ~75% vs reading all 200
+    print("Loading bulk data...")
+    if isinstance(source, str):
+        df = pd.read_csv(source, low_memory=False, dtype={"naics_code": str},
+                         usecols=lambda c: c in USE_COLUMNS)
+    else:
+        print(f"  Reading from {len(source)} checkpoint files...")
+        frames = []
+        for cp in source:
+            chunk = pd.read_csv(cp, low_memory=False, dtype={"naics_code": str},
+                                usecols=lambda c: c in USE_COLUMNS)
+            frames.append(chunk)
+            print(f"    {cp.name}: {len(chunk):,} rows")
+        df = pd.concat(frames, ignore_index=True)
+        del frames
+
+    print(f"  {len(df):,} transaction rows, {len(df.columns)} columns")
+
+    # Ensure optional columns exist
+    for col in USE_COLUMNS:
         if col not in df.columns:
             df[col] = None
 

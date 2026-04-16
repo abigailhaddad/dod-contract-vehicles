@@ -44,7 +44,10 @@ jobs:
         run: pip install requests boto3 pandas
 
       - name: Download checkpoints from R2
-        run: python r2_sync.py download --dir data/bulk_checkpoints
+        run: |
+          python r2_sync.py download --dir data/bulk_checkpoints
+          # Remove any stale merged CSV that may have been uploaded as a checkpoint
+          rm -f data/bulk_checkpoints/dod_contracts_bulk.csv
 
       - name: Run fetch
         id: fetch
@@ -57,27 +60,13 @@ jobs:
             ARGS="$ARGS --force"
           fi
           python fetch_awards.py $ARGS
+          # Delete the merged CSV to save disk -- build reads checkpoints directly
+          rm -f data/dod_contracts_bulk.csv
           echo "status=$(cat data/scan_status.txt)" >> $GITHUB_OUTPUT
 
       - name: Upload checkpoints to R2
         if: always()
         run: python r2_sync.py upload --dir data/bulk_checkpoints
-
-      - name: Upload merged CSV to R2
-        if: steps.fetch.outputs.status == 'done'
-        run: |
-          python -c "
-          import os, boto3
-          from botocore.config import Config
-          s3 = boto3.client('s3',
-              endpoint_url=f'https://{os.environ[\"CF_R2_ACCOUNT_ID\"]}.r2.cloudflarestorage.com',
-              aws_access_key_id=os.environ['CF_R2_ACCESS_KEY_ID'],
-              aws_secret_access_key=os.environ['CF_R2_SECRET_ACCESS_KEY'],
-              config=Config(signature_version='s3v4'), region_name='auto')
-          s3.upload_file('data/dod_contracts_bulk.csv', os.environ['CF_R2_BUCKET'],
-                         'dod_vehicles/dod_contracts_bulk.csv')
-          print('Uploaded dod_contracts_bulk.csv to R2')
-          "
 
       - name: Build dashboard
         if: steps.fetch.outputs.status == 'done'
