@@ -1,0 +1,88 @@
+name: Fetch DoD Contracts
+
+on:
+  workflow_dispatch:
+    inputs:
+      fy:
+        description: "Space-separated fiscal years (e.g. '2026 2025'). Blank = default 5 years."
+        required: false
+        default: ""
+      force:
+        description: "Re-download even if checkpoint exists"
+        type: boolean
+        default: false
+  schedule:
+    - cron: "0 8 1 * *"  # 1st of each month at 8am UTC
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: fetch-dod
+  cancel-in-progress: false
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+
+    env:
+      CF_R2_ACCOUNT_ID: ${{ secrets.CF_R2_ACCOUNT_ID }}
+      CF_R2_BUCKET: ${{ secrets.CF_R2_BUCKET }}
+      CF_R2_ACCESS_KEY_ID: ${{ secrets.CF_R2_ACCESS_KEY_ID }}
+      CF_R2_SECRET_ACCESS_KEY: ${{ secrets.CF_R2_SECRET_ACCESS_KEY }}
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install requests boto3
+
+      - name: Download checkpoints from R2
+        run: python r2_sync.py download --dir data/bulk_checkpoints
+
+      - name: Run fetch
+        id: fetch
+        run: |
+          ARGS="--agencies 097"
+          if [ -n "${{ inputs.fy }}" ]; then
+            ARGS="$ARGS --fy ${{ inputs.fy }}"
+          fi
+          if [ "${{ inputs.force }}" = "true" ]; then
+            ARGS="$ARGS --force"
+          fi
+          python fetch_awards.py $ARGS
+          echo "status=$(cat data/scan_status.txt)" >> $GITHUB_OUTPUT
+
+      - name: Upload checkpoints to R2
+        if: always()
+        run: python r2_sync.py upload --dir data/bulk_checkpoints
+
+      - name: Upload merged CSV to R2
+        if: steps.fetch.outputs.status == 'done'
+        run: |
+          python -c "
+          import os, boto3
+          from botocore.config import Config
+          s3 = boto3.client('s3',
+              endpoint_url=f'https://{os.environ[\"CF_R2_ACCOUNT_ID\"]}.r2.cloudflarestorage.com',
+              aws_access_key_id=os.environ['CF_R2_ACCESS_KEY_ID'],
+              aws_secret_access_key=os.environ['CF_R2_SECRET_ACCESS_KEY'],
+              config=Config(signature_version='s3v4'), region_name='auto')
+          s3.upload_file('data/dod_contracts_bulk.csv', os.environ['CF_R2_BUCKET'],
+                         'dod_vehicles/dod_contracts_bulk.csv')
+          print('Uploaded dod_contracts_bulk.csv to R2')
+          "
+
+      - name: Chain next run if IP blocked
+        if: steps.fetch.outputs.status == 'blocked'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "IP blocked -- chaining next run with fresh runner IP"
+          gh workflow run fetch.yml --repo ${{ github.repository }}

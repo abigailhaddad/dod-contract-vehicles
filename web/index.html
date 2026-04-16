@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DoD Active Contract Vehicles</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css" rel="stylesheet">
+  <style>
+    :root {
+      --navy: #1a2332;
+      --slate: #2d3748;
+      --accent: #4299e1;
+      --success: #48bb78;
+      --warning: #ed8936;
+      --danger: #fc8181;
+    }
+    body { background: #f7fafc; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .navbar { background: var(--navy) !important; }
+    .stat-card { background: white; border-radius: 8px; padding: 1.25rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    .stat-card .value { font-size: 1.8rem; font-weight: 700; color: var(--navy); }
+    .stat-card .label { color: #718096; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; }
+    .status-active { color: var(--success); font-weight: 600; }
+    .status-expiring { color: var(--warning); font-weight: 600; }
+    .status-expired { color: var(--danger); font-weight: 600; }
+    .filter-panel { background: white; border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    .nav-tabs .nav-link.active { font-weight: 600; color: var(--navy); }
+    table.dataTable td { font-size: 0.85rem; vertical-align: middle; }
+    table.dataTable th { font-size: 0.8rem; white-space: nowrap; }
+    .dollars { text-align: right; font-variant-numeric: tabular-nums; }
+    .desc-cell { max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .desc-cell:hover { white-space: normal; overflow: visible; }
+    .contractor-list { font-size: 0.8rem; line-height: 1.4; }
+    #loading { text-align: center; padding: 4rem; color: #718096; }
+    .badge-vehicle { font-size: 0.75rem; }
+    a.usa-link { color: var(--accent); text-decoration: none; }
+    a.usa-link:hover { text-decoration: underline; }
+    .wip-banner {
+      background: #fefcbf; border: 1px solid #ecc94b; padding: 0.5rem 1rem;
+      text-align: center; font-size: 0.85rem; color: #744210;
+    }
+  </style>
+</head>
+<body>
+
+<div class="wip-banner">
+  Work in progress -- data may be incomplete. Last updated: <span id="asOf">--</span>
+</div>
+
+<nav class="navbar navbar-dark py-2">
+  <div class="container-fluid">
+    <span class="navbar-brand mb-0 h5">DoD Active Contract Vehicles</span>
+    <span class="text-light small opacity-75">USASpending bulk data</span>
+  </div>
+</nav>
+
+<div class="container-fluid px-4 py-3">
+
+  <!-- Summary stats -->
+  <div class="row g-3 mb-3" id="statsRow">
+    <div class="col-md-2 col-sm-4 col-6">
+      <div class="stat-card">
+        <div class="value" id="statActive">--</div>
+        <div class="label">Active Contracts</div>
+      </div>
+    </div>
+    <div class="col-md-2 col-sm-4 col-6">
+      <div class="stat-card">
+        <div class="value" id="statExpiring">--</div>
+        <div class="label">Expiring &lt;6mo</div>
+      </div>
+    </div>
+    <div class="col-md-2 col-sm-4 col-6">
+      <div class="stat-card">
+        <div class="value" id="statCeiling">--</div>
+        <div class="label">Total Ceiling</div>
+      </div>
+    </div>
+    <div class="col-md-2 col-sm-4 col-6">
+      <div class="stat-card">
+        <div class="value" id="statRemaining">--</div>
+        <div class="label">Ceiling Remaining</div>
+      </div>
+    </div>
+    <div class="col-md-2 col-sm-4 col-6">
+      <div class="stat-card">
+        <div class="value" id="statContractors">--</div>
+        <div class="label">Contractors</div>
+      </div>
+    </div>
+    <div class="col-md-2 col-sm-4 col-6">
+      <div class="stat-card">
+        <div class="value" id="statVehicles">--</div>
+        <div class="label">Parent Vehicles</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <ul class="nav nav-tabs mb-0" role="tablist">
+    <li class="nav-item">
+      <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#contractsTab" type="button">
+        All Contracts
+      </button>
+    </li>
+    <li class="nav-item">
+      <button class="nav-link" data-bs-toggle="tab" data-bs-target="#vehiclesTab" type="button">
+        Vehicle Rollup
+      </button>
+    </li>
+  </ul>
+
+  <div class="tab-content">
+
+    <!-- Contracts Tab -->
+    <div class="tab-pane fade show active" id="contractsTab">
+      <div class="filter-panel" style="border-top-left-radius:0; border-top-right-radius:0;">
+        <div class="row g-2 align-items-end">
+          <div class="col-md-2">
+            <label class="form-label small mb-1">Status</label>
+            <select id="filterStatus" class="form-select form-select-sm">
+              <option value="">All</option>
+              <option value="Active" selected>Active</option>
+              <option value="Expiring Soon">Expiring Soon</option>
+              <option value="Expired">Expired</option>
+            </select>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label small mb-1">Sub-Agency</label>
+            <select id="filterAgency" class="form-select form-select-sm">
+              <option value="">All</option>
+            </select>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label small mb-1">Vehicle Type</label>
+            <select id="filterVehicle" class="form-select form-select-sm">
+              <option value="">All</option>
+            </select>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label small mb-1">Pricing</label>
+            <select id="filterPricing" class="form-select form-select-sm">
+              <option value="">All</option>
+            </select>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label small mb-1">NAICS (2-digit)</label>
+            <select id="filterNaics" class="form-select form-select-sm">
+              <option value="">All</option>
+            </select>
+          </div>
+          <div class="col-md-2">
+            <button class="btn btn-sm btn-outline-secondary w-100" onclick="clearFilters()">Clear Filters</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="loading">Loading contract data...</div>
+      <div class="table-responsive" style="display:none;" id="contractsTableWrap">
+        <table id="contractsTable" class="table table-sm table-striped table-hover" style="width:100%">
+          <thead>
+            <tr>
+              <th>Status</th>
+              <th>PIID</th>
+              <th>Parent PIID</th>
+              <th>Contractor</th>
+              <th>Sub-Agency</th>
+              <th>Awarding Office</th>
+              <th>Description</th>
+              <th>NAICS</th>
+              <th>Pricing</th>
+              <th>Vehicle Type</th>
+              <th>PoP End</th>
+              <th>Potential End</th>
+              <th class="dollars">Ceiling</th>
+              <th class="dollars">Obligated</th>
+              <th class="dollars">Remaining</th>
+              <th>State</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Vehicles Tab -->
+    <div class="tab-pane fade" id="vehiclesTab">
+      <div class="filter-panel" style="border-top-left-radius:0; border-top-right-radius:0;">
+        <div class="row g-2 align-items-end">
+          <div class="col-md-2">
+            <label class="form-label small mb-1">Status</label>
+            <select id="vFilterStatus" class="form-select form-select-sm">
+              <option value="">All</option>
+              <option value="Active" selected>Active</option>
+              <option value="Expiring Soon">Expiring Soon</option>
+              <option value="Expired">Expired</option>
+            </select>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label small mb-1">Min Ceiling Remaining</label>
+            <select id="vFilterMinRemaining" class="form-select form-select-sm">
+              <option value="">Any</option>
+              <option value="100000">$100K+</option>
+              <option value="1000000">$1M+</option>
+              <option value="10000000">$10M+</option>
+              <option value="100000000">$100M+</option>
+            </select>
+          </div>
+          <div class="col-md-2">
+            <button class="btn btn-sm btn-outline-secondary w-100" onclick="clearVehicleFilters()">Clear Filters</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="vLoading">Loading vehicle data...</div>
+      <div class="table-responsive" style="display:none;" id="vehiclesTableWrap">
+        <table id="vehiclesTable" class="table table-sm table-striped table-hover" style="width:100%">
+          <thead>
+            <tr>
+              <th>Status</th>
+              <th>Parent PIID</th>
+              <th>Type</th>
+              <th>Sub-Agency</th>
+              <th>Office</th>
+              <th>Orders</th>
+              <th>Contractors</th>
+              <th>NAICS</th>
+              <th>Scope</th>
+              <th>Latest End</th>
+              <th class="dollars">Total Ceiling</th>
+              <th class="dollars">Obligated</th>
+              <th class="dollars">Remaining</th>
+              <th>% Used</th>
+              <th>States</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Methodology -->
+  <div class="card mt-4 mb-4">
+    <div class="card-body">
+      <h6 class="card-title">About this data</h6>
+      <p class="card-text small text-muted mb-2">
+        Source: <a href="https://www.usaspending.gov/" class="usa-link">USASpending.gov</a> bulk award archives
+        for Department of Defense (agency code 097).
+      </p>
+      <ul class="small text-muted mb-0">
+        <li><strong>Ceiling</strong> = <code>potential_total_value_of_award</code> (includes all options)</li>
+        <li><strong>Obligated</strong> = <code>total_dollars_obligated</code> (cumulative, latest transaction)</li>
+        <li><strong>Ceiling Remaining</strong> = Ceiling - Obligated (approximate; does not reflect deobligations or ceiling modifications not yet in USASpending)</li>
+        <li><strong>Active</strong> = current PoP end date is in the future</li>
+        <li><strong>Expiring Soon</strong> = PoP end date within 6 months</li>
+        <li><strong>Vehicle Rollup</strong> groups task/delivery orders by their parent IDIQ/BPA PIID.
+            Ceiling and obligation totals are summed across all orders, not the vehicle-level ceiling itself.</li>
+        <li>Geographic coverage = primary place of performance (state), not necessarily the full geographic scope of the vehicle.</li>
+      </ul>
+    </div>
+  </div>
+
+</div>
+
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.8/js/dataTables.bootstrap5.min.js"></script>
+<script>
+
+// --- Helpers ---
+function fmt$(n) {
+  if (n == null) return '--';
+  const abs = Math.abs(n);
+  if (abs >= 1e9) return '$' + (n / 1e9).toFixed(1) + 'B';
+  if (abs >= 1e6) return '$' + (n / 1e6).toFixed(1) + 'M';
+  if (abs >= 1e3) return '$' + (n / 1e3).toFixed(0) + 'K';
+  return '$' + n.toLocaleString();
+}
+
+function statusBadge(s) {
+  const cls = s === 'Active' ? 'status-active' : s === 'Expiring Soon' ? 'status-expiring' : 'status-expired';
+  return `<span class="${cls}">${s}</span>`;
+}
+
+function truncate(s, n) {
+  if (!s) return '';
+  return s.length > n ? s.substring(0, n) + '...' : s;
+}
+
+// --- Data ---
+let contractsData = [];
+let vehiclesData = [];
+let contractsTable, vehiclesTable;
+
+async function loadData() {
+  try {
+    const [summaryRes, contractsRes, vehiclesRes, filtersRes] = await Promise.all([
+      fetch('data/summary.json').then(r => r.json()),
+      fetch('data/contracts.json').then(r => r.json()),
+      fetch('data/vehicles.json').then(r => r.json()),
+      fetch('data/filters.json').then(r => r.json()),
+    ]);
+
+    contractsData = contractsRes;
+    vehiclesData = vehiclesRes;
+
+    // Summary stats
+    document.getElementById('statActive').textContent = summaryRes.active_contracts.toLocaleString();
+    document.getElementById('statExpiring').textContent = summaryRes.expiring_soon.toLocaleString();
+    document.getElementById('statCeiling').textContent = '$' + summaryRes.total_ceiling_b + 'B';
+    document.getElementById('statRemaining').textContent = '$' + summaryRes.ceiling_remaining_b + 'B';
+    document.getElementById('statContractors').textContent = summaryRes.unique_contractors.toLocaleString();
+    document.getElementById('statVehicles').textContent = summaryRes.unique_vehicles.toLocaleString();
+    document.getElementById('asOf').textContent = summaryRes.as_of;
+
+    // Populate filter dropdowns
+    populateSelect('filterAgency', filtersRes.sub_agencies || []);
+    populateSelect('filterVehicle', filtersRes.vehicle_types || []);
+    populateSelect('filterPricing', filtersRes.pricing_types || []);
+    populateSelect('filterNaics', (filtersRes.naics_2digit || []).map(c => ({value: c, label: 'NAICS ' + c})));
+
+    initContractsTable();
+    initVehiclesTable();
+
+  } catch (err) {
+    document.getElementById('loading').innerHTML =
+      '<p class="text-danger">Failed to load data. Run <code>python3 build_dashboard.py</code> first.</p>' +
+      '<p class="text-muted small">' + err.message + '</p>';
+  }
+}
+
+function populateSelect(id, options) {
+  const sel = document.getElementById(id);
+  options.forEach(opt => {
+    const o = document.createElement('option');
+    if (typeof opt === 'object') { o.value = opt.value; o.textContent = opt.label; }
+    else { o.value = opt; o.textContent = opt; }
+    sel.appendChild(o);
+  });
+}
+
+// --- Contracts Table ---
+function initContractsTable() {
+  const tbody = document.querySelector('#contractsTable tbody');
+  const statusFilter = document.getElementById('filterStatus').value;
+
+  // Initial filter to active
+  const filtered = statusFilter
+    ? contractsData.filter(c => c.status === statusFilter)
+    : contractsData;
+
+  contractsTable = $('#contractsTable').DataTable({
+    data: filtered,
+    columns: [
+      { data: 'status', render: statusBadge },
+      { data: 'piid', render: (d, t, r) => r.link ? `<a href="${r.link}" class="usa-link" target="_blank">${d || '--'}</a>` : (d || '--') },
+      { data: 'parent_piid', render: d => d || '--' },
+      { data: 'contractor', render: d => truncate(d, 40) },
+      { data: 'sub_agency', render: d => truncate(d, 30) },
+      { data: 'awarding_office', render: d => truncate(d, 30) },
+      { data: 'description', render: d => `<span class="desc-cell" title="${(d||'').replace(/"/g, '&quot;')}">${truncate(d, 50)}</span>` },
+      { data: 'naics', render: (d, t, r) => d ? `<span title="${r.naics_desc || ''}">${d}</span>` : '--' },
+      { data: 'pricing', render: d => truncate(d, 20) },
+      { data: 'vehicle_type', render: d => d === 'Standalone' ? '<span class="text-muted">--</span>' : `<span class="badge bg-info badge-vehicle">${d}</span>` },
+      { data: 'pop_end' },
+      { data: 'pop_potential_end' },
+      { data: 'ceiling', render: d => `<span class="dollars">${fmt$(d)}</span>`, className: 'dollars' },
+      { data: 'obligated', render: d => `<span class="dollars">${fmt$(d)}</span>`, className: 'dollars' },
+      { data: 'ceiling_remaining', render: d => `<span class="dollars">${fmt$(d)}</span>`, className: 'dollars' },
+      { data: 'place_state', render: d => d || '--' },
+    ],
+    order: [[14, 'desc']],  // ceiling remaining descending
+    pageLength: 50,
+    lengthMenu: [25, 50, 100, 250],
+    deferRender: true,
+    language: { search: 'Search:', info: 'Showing _START_-_END_ of _TOTAL_ contracts' },
+  });
+
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('contractsTableWrap').style.display = 'block';
+}
+
+function applyContractFilters() {
+  if (!contractsTable) return;
+  const status = document.getElementById('filterStatus').value;
+  const agency = document.getElementById('filterAgency').value;
+  const vehicle = document.getElementById('filterVehicle').value;
+  const pricing = document.getElementById('filterPricing').value;
+  const naics = document.getElementById('filterNaics').value;
+
+  let filtered = contractsData;
+  if (status) filtered = filtered.filter(c => c.status === status);
+  if (agency) filtered = filtered.filter(c => c.sub_agency === agency);
+  if (vehicle) filtered = filtered.filter(c => c.vehicle_type === vehicle);
+  if (pricing) filtered = filtered.filter(c => c.pricing === pricing);
+  if (naics) filtered = filtered.filter(c => c.naics && c.naics.startsWith(naics));
+
+  contractsTable.clear().rows.add(filtered).draw();
+}
+
+function clearFilters() {
+  document.getElementById('filterStatus').value = '';
+  document.getElementById('filterAgency').value = '';
+  document.getElementById('filterVehicle').value = '';
+  document.getElementById('filterPricing').value = '';
+  document.getElementById('filterNaics').value = '';
+  applyContractFilters();
+}
+
+// Filter event listeners
+['filterStatus','filterAgency','filterVehicle','filterPricing','filterNaics'].forEach(id => {
+  document.getElementById(id).addEventListener('change', applyContractFilters);
+});
+
+// --- Vehicles Table ---
+function initVehiclesTable() {
+  const statusFilter = document.getElementById('vFilterStatus').value;
+  const filtered = statusFilter
+    ? vehiclesData.filter(v => v.status === statusFilter)
+    : vehiclesData;
+
+  vehiclesTable = $('#vehiclesTable').DataTable({
+    data: filtered,
+    columns: [
+      { data: 'status', render: statusBadge },
+      { data: 'parent_piid' },
+      { data: 'vehicle_type', render: d => d || '--' },
+      { data: 'sub_agency', render: d => truncate(d, 25) },
+      { data: 'awarding_office', render: d => truncate(d, 25) },
+      { data: 'order_count' },
+      { data: 'contractors', render: d => {
+          if (!d || !d.length) return '--';
+          const shown = d.slice(0, 3).map(c => truncate(c, 30)).join('<br>');
+          return `<span class="contractor-list">${shown}${d.length > 3 ? '<br>+' + (d.length - 3) + ' more' : ''}</span>`;
+        }
+      },
+      { data: 'naics_codes', render: d => d && d.length ? d.slice(0, 3).join(', ') + (d.length > 3 ? '...' : '') : '--' },
+      { data: 'descriptions', render: d => {
+          if (!d || !d.length) return '--';
+          return `<span class="desc-cell" title="${d.join(' | ').replace(/"/g, '&quot;')}">${truncate(d[0], 50)}</span>`;
+        }
+      },
+      { data: 'latest_end' },
+      { data: 'total_ceiling', render: d => `<span class="dollars">${fmt$(d)}</span>`, className: 'dollars' },
+      { data: 'total_obligated', render: d => `<span class="dollars">${fmt$(d)}</span>`, className: 'dollars' },
+      { data: 'ceiling_remaining', render: d => `<span class="dollars">${fmt$(d)}</span>`, className: 'dollars' },
+      { data: 'pct_ceiling_used', render: d => d != null ? d + '%' : '--' },
+      { data: 'states', render: d => d && d.length ? d.slice(0, 5).join(', ') + (d.length > 5 ? '...' : '') : '--' },
+    ],
+    order: [[12, 'desc']],  // ceiling remaining descending
+    pageLength: 50,
+    lengthMenu: [25, 50, 100, 250],
+    deferRender: true,
+    language: { search: 'Search:', info: 'Showing _START_-_END_ of _TOTAL_ vehicles' },
+  });
+
+  document.getElementById('vLoading').style.display = 'none';
+  document.getElementById('vehiclesTableWrap').style.display = 'block';
+}
+
+function applyVehicleFilters() {
+  if (!vehiclesTable) return;
+  const status = document.getElementById('vFilterStatus').value;
+  const minRemaining = parseInt(document.getElementById('vFilterMinRemaining').value) || 0;
+
+  let filtered = vehiclesData;
+  if (status) filtered = filtered.filter(v => v.status === status);
+  if (minRemaining) filtered = filtered.filter(v => v.ceiling_remaining >= minRemaining);
+
+  vehiclesTable.clear().rows.add(filtered).draw();
+}
+
+function clearVehicleFilters() {
+  document.getElementById('vFilterStatus').value = '';
+  document.getElementById('vFilterMinRemaining').value = '';
+  applyVehicleFilters();
+}
+
+['vFilterStatus', 'vFilterMinRemaining'].forEach(id => {
+  document.getElementById(id).addEventListener('change', applyVehicleFilters);
+});
+
+// --- Init ---
+loadData();
+
+</script>
+</body>
+</html>
