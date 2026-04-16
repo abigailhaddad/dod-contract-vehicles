@@ -542,8 +542,8 @@ def build_filter_options(df: pd.DataFrame) -> dict:
 
 
 def main():
-    if not BULK_CSV.exists():
-        print(f"{BULK_CSV} not found -- run fetch_awards.py first.")
+    if not BULK_CSV.exists() and not list(CHECKPOINT_DIR.glob("FY*.csv")):
+        print(f"No data found -- run fetch_awards.py first.")
         return
 
     WEB_DATA_DIR.mkdir(parents=True, exist_ok=True)
