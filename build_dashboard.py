@@ -517,8 +517,11 @@ def build_filter_options(contracts: dict) -> dict:
 
 
 def main():
-    if not BULK_CSV.exists() and not list(CHECKPOINT_DIR.glob("FY*.csv")):
-        print("No data found -- run fetch_awards.py first.")
+    import os
+    has_local = BULK_CSV.exists() or list(CHECKPOINT_DIR.glob("FY*.csv"))
+    has_r2 = bool(os.environ.get("CF_R2_ACCOUNT_ID"))
+    if not has_local and not has_r2:
+        print("No data found -- run fetch_awards.py first or set R2 credentials.")
         return
 
     WEB_DATA_DIR.mkdir(parents=True, exist_ok=True)
