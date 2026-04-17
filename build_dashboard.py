@@ -497,20 +497,23 @@ def build_vehicles_json(contracts: dict) -> list:
 
 
 def build_summary(contracts: dict, vehicles_json: list) -> dict:
-    active_count = sum(1 for c in contracts.values() if c["status"] == "Active")
+    # "Active" headline stats treat Expiring Soon as a subset of in-force
+    # (matches the page's glossary). expiring_soon remains the narrow count.
+    IN_FORCE = ("Active", "Expiring Soon")
+    active_count = sum(1 for c in contracts.values() if c["status"] in IN_FORCE)
     expiring_count = sum(1 for c in contracts.values() if c["status"] == "Expiring Soon")
-    active_ceiling = sum(c.get("ceiling") or 0 for c in contracts.values() if c["status"] == "Active")
-    active_obligated = sum(c.get("obligated") or 0 for c in contracts.values() if c["status"] == "Active")
+    active_ceiling = sum(c.get("ceiling") or 0 for c in contracts.values() if c["status"] in IN_FORCE)
+    active_obligated = sum(c.get("obligated") or 0 for c in contracts.values() if c["status"] in IN_FORCE)
     active_remaining = active_ceiling - active_obligated
     active_contractors = len(set(
         c.get("recipient_name") for c in contracts.values()
-        if c["status"] == "Active" and c.get("recipient_name")
+        if c["status"] in IN_FORCE and c.get("recipient_name")
     ))
     active_offices = len(set(
         c.get("awarding_office") for c in contracts.values()
-        if c["status"] == "Active" and c.get("awarding_office")
+        if c["status"] in IN_FORCE and c.get("awarding_office")
     ))
-    active_vehicles = sum(1 for v in vehicles_json if v["status"] in ("Active", "Expiring Soon"))
+    active_vehicles = sum(1 for v in vehicles_json if v["status"] in IN_FORCE)
 
     return {
         "total_contracts":      len(contracts),
