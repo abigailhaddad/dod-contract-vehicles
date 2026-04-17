@@ -17,7 +17,8 @@ BUCKET     = os.environ["CF_R2_BUCKET"]
 ACCESS_KEY = os.environ["CF_R2_ACCESS_KEY_ID"]
 SECRET_KEY = os.environ["CF_R2_SECRET_ACCESS_KEY"]
 
-PREFIX = "dod_vehicles/"
+DEFAULT_PREFIX = "dod_vehicles/"
+DEFAULT_SUFFIXES = (".csv", ".not_found")
 
 
 def _client():
@@ -31,13 +32,13 @@ def _client():
     )
 
 
-def download_state(local_dir: Path) -> int:
-    """Download all checkpoint files from R2 to local_dir. Returns count."""
+def download_state(local_dir: Path, prefix: str = DEFAULT_PREFIX) -> int:
+    """Download all files under `prefix` from R2 to local_dir."""
     local_dir.mkdir(parents=True, exist_ok=True)
     s3 = _client()
     paginator = s3.get_paginator("list_objects_v2")
     count = 0
-    for page in paginator.paginate(Bucket=BUCKET, Prefix=PREFIX):
+    for page in paginator.paginate(Bucket=BUCKET, Prefix=prefix):
         for obj in page.get("Contents", []):
             key = obj["Key"]
             local_path = local_dir / Path(key).name
@@ -49,13 +50,14 @@ def download_state(local_dir: Path) -> int:
     return count
 
 
-def upload_state(local_dir: Path) -> int:
-    """Upload all checkpoint files from local_dir to R2. Returns count."""
+def upload_state(local_dir: Path, prefix: str = DEFAULT_PREFIX,
+                 suffixes: tuple = DEFAULT_SUFFIXES) -> int:
+    """Upload files matching `suffixes` from local_dir to R2 under `prefix`."""
     s3 = _client()
     count = 0
     for f in sorted(local_dir.iterdir()):
-        if f.suffix in {".csv", ".not_found"}:
-            key = PREFIX + f.name
+        if f.suffix in suffixes:
+            key = prefix + f.name
             s3.upload_file(str(f), BUCKET, key)
             count += 1
     print(f"Uploaded {count} files to R2")
@@ -67,9 +69,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("action", choices=["upload", "download"])
     parser.add_argument("--dir", default="data/bulk_checkpoints")
+    parser.add_argument("--prefix", default=DEFAULT_PREFIX)
+    parser.add_argument("--suffix", action="append",
+                        help="File extension to include (upload only). "
+                             "Repeat for multiple. Default: .csv, .not_found")
     args = parser.parse_args()
     d = Path(args.dir)
     if args.action == "download":
-        download_state(d)
+        download_state(d, prefix=args.prefix)
     else:
-        upload_state(d)
+        suffixes = tuple(args.suffix) if args.suffix else DEFAULT_SUFFIXES
+        upload_state(d, prefix=args.prefix, suffixes=suffixes)

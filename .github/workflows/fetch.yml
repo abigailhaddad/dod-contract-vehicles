@@ -109,14 +109,5 @@ jobs:
       - name: Build dashboard (streams from R2, no local data needed)
         run: python build_dashboard.py
 
-      - name: Commit dashboard data
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add web/data/ || true
-          if git diff --cached --quiet; then
-            echo "No changes to dashboard data"
-          else
-            git commit -m "Update dashboard data ($(date -u +%Y-%m-%d))"
-            git push
-          fi
+      - name: Upload dashboard JSONs to R2
+        run: python r2_sync.py upload --dir web/data --prefix dashboard_data/ --suffix .json
