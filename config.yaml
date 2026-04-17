@@ -1,0 +1,59 @@
+# DoD Contract Vehicles — pipeline configuration.
+# This file is read by fetch_awards.py and build_dashboard.py, and a subset
+# is mirrored to web/data/config.json for the methodology page.
+
+fetch:
+  # USASpending toptier agency code. 097 = Department of Defense.
+  agency_code: "097"
+  # How many fiscal years of data to pull (including the current one).
+  fiscal_years_back: 5
+
+classification:
+  # Threshold for "Expiring Soon" label (days from today).
+  expiring_soon_days: 180
+
+  # Date fields (in the source USASpending bulk CSV) that feed "effective end".
+  # Effective end = max of whichever of these are populated on a contract's
+  # latest transaction. Order is descriptive only; max ignores order.
+  #   - ordering_period_end_date: for IDVs (IDIQ/BPA/GWAC), the last date you
+  #     can place orders against the vehicle. Only populated on IDV masters.
+  #   - period_of_performance_potential_end_date: current PoP end including
+  #     all exercisable options.
+  #   - period_of_performance_current_end_date: current PoP end, base period
+  #     only. Shortest and most conservative.
+  effective_end_fields:
+    - ordering_period_end_date
+    - period_of_performance_potential_end_date
+    - period_of_performance_current_end_date
+
+  # Drop contracts whose effective end is before today (the "Expired" bucket).
+  # These can't be ordered against and add noise.
+  drop_expired: true
+
+  # Drop contracts with no parseable date in any effective_end_fields
+  # (the "Unknown" bucket). No reliable way to tell if they're live.
+  drop_unknown: true
+
+labels:
+  # Parent award IDV type code → human-friendly name. Used for vehicle_type
+  # on task-order rows (the parent is the IDV).
+  parent_award_types:
+    IDV_A: GWAC
+    IDV_B: IDC
+    IDV_B_A: IDC / Requirements
+    IDV_B_B: IDC / IDIQ
+    IDV_B_C: IDC / Definite Quantity
+    IDV_C: FSS
+    IDV_D: BOA
+    IDV_E: BPA
+
+  # Contract pricing type code → human-friendly name.
+  pricing_types:
+    J: Firm Fixed Price
+    Y: Time & Materials
+    Z: Labor Hours
+    U: Cost Plus Fixed Fee
+    V: Cost Plus Award Fee
+    S: Cost No Fee
+    R: Cost Plus Incentive Fee
+    A: Fixed Price Redetermination

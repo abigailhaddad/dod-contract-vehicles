@@ -46,7 +46,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: pip install requests boto3
+        run: pip install requests boto3 pyyaml
 
       - name: Download checkpoints from R2
         run: |
@@ -104,7 +104,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: pip install boto3
+        run: pip install boto3 pyyaml
 
       - name: Build dashboard (streams from R2, no local data needed)
         run: python build_dashboard.py

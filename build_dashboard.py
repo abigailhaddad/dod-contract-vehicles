@@ -20,8 +20,10 @@ import csv
 import json
 import sys
 from collections import defaultdict
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
+
+import yaml
 
 csv.field_size_limit(min(sys.maxsize, 2**31 - 1))
 
@@ -29,35 +31,28 @@ BULK_CSV       = Path("data/dod_contracts_bulk.csv")
 CHECKPOINT_DIR = Path("data/bulk_checkpoints")
 SAM_CSV        = Path("data/sam_lookup.csv")
 WEB_DATA_DIR   = Path("web/data")
+CONFIG_PATH    = Path("config.yaml")
 
 TODAY = date.today()
 TODAY_STR = TODAY.isoformat()
 
 # ---------------------------------------------------------------------------
-# Labels
+# Config
 # ---------------------------------------------------------------------------
 
-PARENT_AWARD_TYPE_LABELS = {
-    "IDV_A": "GWAC",
-    "IDV_B": "IDC",
-    "IDV_B_A": "IDC / Requirements",
-    "IDV_B_B": "IDC / IDIQ",
-    "IDV_B_C": "IDC / Definite Quantity",
-    "IDV_C": "FSS",
-    "IDV_D": "BOA",
-    "IDV_E": "BPA",
-}
+with open(CONFIG_PATH) as _f:
+    CONFIG = yaml.safe_load(_f)
 
-PRICING_LABELS = {
-    "J": "Firm Fixed Price",
-    "Y": "Time & Materials",
-    "Z": "Labor Hours",
-    "U": "Cost Plus Fixed Fee",
-    "V": "Cost Plus Award Fee",
-    "S": "Cost No Fee",
-    "R": "Cost Plus Incentive Fee",
-    "A": "Fixed Price Redetermination",
-}
+CLASSIFY              = CONFIG["classification"]
+EXPIRING_SOON_DAYS    = int(CLASSIFY["expiring_soon_days"])
+EFFECTIVE_END_FIELDS  = list(CLASSIFY["effective_end_fields"])
+DROP_EXPIRED          = bool(CLASSIFY["drop_expired"])
+DROP_UNKNOWN          = bool(CLASSIFY["drop_unknown"])
+
+EXPIRING_SOON_CUTOFF  = (TODAY + timedelta(days=EXPIRING_SOON_DAYS)).isoformat()
+
+PARENT_AWARD_TYPE_LABELS = dict(CONFIG["labels"]["parent_award_types"])
+PRICING_LABELS           = dict(CONFIG["labels"]["pricing_types"])
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -89,19 +84,36 @@ def _best_description(award_desc, base_desc, txn_desc) -> str | None:
     return max(candidates, key=len)
 
 
-def _classify_status(pop_end_str: str | None) -> str:
-    if not pop_end_str:
+def _effective_end(row_or_dict: dict, fields: list = None) -> str:
+    """Return the max (latest) date string among the configured effective-end fields.
+    Empty string if none are populated. Inputs may be raw CSV rows or aggregated
+    contract dicts — both use the same field names."""
+    if fields is None:
+        fields = EFFECTIVE_END_FIELDS
+    best = ""
+    for f in fields:
+        v = (row_or_dict.get(f) or "")
+        if isinstance(v, str):
+            v = v.strip()[:10]
+        if v and v > best:
+            best = v
+    return best
+
+
+def _classify_status(effective_end_str: str | None) -> str:
+    """Classify by effective end date. Returns Active / Expiring Soon / Expired /
+    Unknown. Unknown means unparseable or missing date; Expired means end < today."""
+    if not effective_end_str:
         return "Unknown"
     try:
-        pop_end = datetime.strptime(pop_end_str[:10], "%Y-%m-%d").date()
+        end = datetime.strptime(effective_end_str[:10], "%Y-%m-%d").date()
     except (ValueError, TypeError):
         return "Unknown"
-    if pop_end >= TODAY:
-        days_left = (pop_end - TODAY).days
-        if days_left <= 180:
-            return "Expiring Soon"
-        return "Active"
-    return "Expired"
+    if end < TODAY:
+        return "Expired"
+    if (end - TODAY).days <= EXPIRING_SOON_DAYS:
+        return "Expiring Soon"
+    return "Active"
 
 
 def _sam_url(sol_id: str | None) -> str | None:
@@ -196,10 +208,10 @@ def stream_and_aggregate() -> dict:
     # Track sum of federal_action_obligation per contract (it's per-transaction)
     fao_sums = defaultdict(float)
 
-    # Drop expired contracts. Keeps Active, Expiring Soon, Unknown, and any
-    # contract whose potential end is still in the future.
-    cutoff_date = TODAY_STR
-    skipped = 0
+    # Early filter driven by config: drop Expired (if configured) rows here
+    # to keep memory down. Unknown is handled after both passes complete, since
+    # any transaction of a given contract may fill in the end date.
+    skipped_expired = 0
 
     total_rows = 0
     for src_name, src_iter in sources:
@@ -215,12 +227,12 @@ def stream_and_aggregate() -> dict:
             if not key:
                 continue
 
-            # Early filter: drop expired contracts (best end date < today).
-            pop_end = _val(row, "period_of_performance_current_end_date") or ""
-            pop_potential = _val(row, "period_of_performance_potential_end_date") or ""
-            best_end = max(pop_end[:10], pop_potential[:10]) if pop_end or pop_potential else ""
-            if best_end and best_end < cutoff_date:
-                skipped += 1
+            # Early filter: drop rows whose effective end is known and expired.
+            # Rows with no end date are kept in pass 1 (a later transaction
+            # may populate one).
+            eff_end = _effective_end(row)
+            if DROP_EXPIRED and eff_end and eff_end < TODAY_STR:
+                skipped_expired += 1
                 continue
 
             action_date = _val(row, "action_date") or ""
@@ -247,6 +259,8 @@ def stream_and_aggregate() -> dict:
                 "pop_start":          _val(row, "period_of_performance_start_date"),
                 "pop_end":            _val(row, "period_of_performance_current_end_date"),
                 "pop_potential_end":  _val(row, "period_of_performance_potential_end_date"),
+                "ordering_period_end": _val(row, "ordering_period_end_date"),
+                "effective_end":      eff_end or None,
                 "department":         _val(row, "awarding_agency_name"),
                 "sub_agency":         _val(row, "awarding_sub_agency_name"),
                 "awarding_office":    _val(row, "awarding_office_name"),
@@ -272,7 +286,7 @@ def stream_and_aggregate() -> dict:
 
         print(f"{file_rows:,} rows")
 
-    print(f"  Total: {total_rows:,} transactions, {skipped:,} skipped (expired), {len(contracts):,} unique contracts")
+    print(f"  Total: {total_rows:,} transactions, {skipped_expired:,} skipped (expired), {len(contracts):,} unique contracts")
 
     # Apply fao fallback for contracts missing total_dollars_obligated
     for key, c in contracts.items():
@@ -310,10 +324,9 @@ def stream_and_aggregate() -> dict:
 # ---------------------------------------------------------------------------
 
 def enrich_contracts(contracts: dict) -> dict:
-    """Add derived fields to each contract dict."""
-    cutoff = date(TODAY.year - 1, TODAY.month, TODAY.day)
-    cutoff_str = cutoff.isoformat()
-
+    """Add derived fields to each contract dict. Also drops Unknown (and Expired,
+    if still present) when configured — applied here rather than streaming so
+    later transactions can fill in a missing end date."""
     for c in contracts.values():
         # Ceiling remaining
         ceiling = c.get("ceiling")
@@ -323,8 +336,8 @@ def enrich_contracts(contracts: dict) -> dict:
         else:
             c["ceiling_remaining"] = None
 
-        # Status
-        c["status"] = _classify_status(c.get("pop_end"))
+        # Status (from effective_end computed during streaming)
+        c["status"] = _classify_status(c.get("effective_end"))
 
         # Vehicle type
         c["vehicle_type"] = PARENT_AWARD_TYPE_LABELS.get(
@@ -353,17 +366,10 @@ def enrich_contracts(contracts: dict) -> dict:
 
 
 def build_contracts_json(contracts: dict) -> list:
-    """Build JSON for active + expiring + recently expired contracts."""
-    cutoff = date(TODAY.year - 1, TODAY.month, TODAY.day).isoformat()
-
+    """Build JSON for all (post-filter) contracts."""
     records = []
     for c in contracts.values():
         status = c["status"]
-        # Include active, expiring, unknown, and recently expired
-        if status == "Expired":
-            pop_end = (c.get("pop_end") or "")[:10]
-            if pop_end < cutoff:
-                continue
         records.append({
             "key":                c["key"],
             "piid":               c.get("piid"),
@@ -389,6 +395,8 @@ def build_contracts_json(contracts: dict) -> list:
             "pop_start":          (c.get("pop_start") or "")[:10] or None,
             "pop_end":            (c.get("pop_end") or "")[:10] or None,
             "pop_potential_end":  (c.get("pop_potential_end") or "")[:10] or None,
+            "ordering_period_end": (c.get("ordering_period_end") or "")[:10] or None,
+            "effective_end":      (c.get("effective_end") or "")[:10] or None,
             "ceiling":            round(c["ceiling"]) if c.get("ceiling") else None,
             "obligated":          round(c["obligated"]) if c.get("obligated") else None,
             "ceiling_remaining":  round(c["ceiling_remaining"]) if c.get("ceiling_remaining") is not None else None,
@@ -414,6 +422,7 @@ def build_vehicles_json(contracts: dict) -> list:
         "department": None, "sub_agency": None, "awarding_office": None,
         "vehicle_type": None, "parent_award_type": None,
         "earliest_start": None, "latest_end": None, "latest_potential_end": None,
+        "latest_effective_end": None,
     })
 
     for c in contracts.values():
@@ -449,19 +458,24 @@ def build_vehicles_json(contracts: dict) -> list:
         ps = (c.get("pop_start") or "")[:10]
         pe = (c.get("pop_end") or "")[:10]
         ppe = (c.get("pop_potential_end") or "")[:10]
+        ee = (c.get("effective_end") or "")[:10]
         if ps and (not v["earliest_start"] or ps < v["earliest_start"]):
             v["earliest_start"] = ps
         if pe and (not v["latest_end"] or pe > v["latest_end"]):
             v["latest_end"] = pe
         if ppe and (not v["latest_potential_end"] or ppe > v["latest_potential_end"]):
             v["latest_potential_end"] = ppe
+        if ee and (not v["latest_effective_end"] or ee > v["latest_effective_end"]):
+            v["latest_effective_end"] = ee
 
-    # Build JSON records
-    cutoff = date(TODAY.year - 1, TODAY.month, TODAY.day).isoformat()
+    # Build JSON records. Vehicle status from its latest effective end across
+    # all contributing orders; apply configured drop policy.
     records = []
     for parent_piid, v in vehicles.items():
-        status = _classify_status(v["latest_end"])
-        if status == "Expired" and (v["latest_end"] or "") < cutoff:
+        status = _classify_status(v["latest_effective_end"])
+        if DROP_EXPIRED and status == "Expired":
+            continue
+        if DROP_UNKNOWN and status == "Unknown":
             continue
 
         remaining = v["total_ceiling"] - v["total_obligated"]
@@ -485,6 +499,7 @@ def build_vehicles_json(contracts: dict) -> list:
             "earliest_start":     v["earliest_start"],
             "latest_end":         v["latest_end"],
             "latest_potential_end": v["latest_potential_end"],
+            "latest_effective_end": v["latest_effective_end"],
             "total_ceiling":      round(v["total_ceiling"]) if v["total_ceiling"] else None,
             "total_obligated":    round(v["total_obligated"]) if v["total_obligated"] else None,
             "ceiling_remaining":  round(remaining),
@@ -530,26 +545,42 @@ def build_summary(contracts: dict, vehicles_json: list) -> dict:
 
 
 def build_filter_options(contracts: dict) -> dict:
-    active = [c for c in contracts.values() if c["status"] in ("Active", "Expiring Soon", "Unknown")]
+    values = list(contracts.values())
 
     def unique_sorted(field, n=50):
-        vals = sorted(set(c.get(field) for c in active if c.get(field)))
+        vals = sorted(set(c.get(field) for c in values if c.get(field)))
         return vals[:n]
 
+    statuses = sorted(set(c["status"] for c in values))
     naics_2 = sorted(set(
         c.get("naics_code", "")[:2]
-        for c in active
+        for c in values
         if c.get("naics_code") and len(c["naics_code"]) >= 2
     ))
 
     return {
-        "statuses":       ["Active", "Expiring Soon", "Expired", "Unknown"],
+        "statuses":       statuses,
         "departments":    unique_sorted("department"),
         "sub_agencies":   unique_sorted("sub_agency"),
         "vehicle_types":  unique_sorted("vehicle_type"),
         "pricing_types":  unique_sorted("pricing_type_label"),
         "naics_2digit":   naics_2,
         "states":         unique_sorted("place_state"),
+    }
+
+
+def build_config_mirror() -> dict:
+    """A small frontend-facing mirror of config.yaml so the methodology page
+    can display the live values."""
+    return {
+        "as_of":                TODAY_STR,
+        "fetch":                CONFIG["fetch"],
+        "classification": {
+            "expiring_soon_days":   EXPIRING_SOON_DAYS,
+            "effective_end_fields": EFFECTIVE_END_FIELDS,
+            "drop_expired":         DROP_EXPIRED,
+            "drop_unknown":         DROP_UNKNOWN,
+        },
     }
 
 
@@ -567,6 +598,24 @@ def main():
     contracts = stream_and_aggregate()
     contracts = enrich_contracts(contracts)
 
+    # Apply configured drop policy (Expired was already early-filtered during
+    # streaming; Unknown is dropped here because a later transaction might have
+    # populated an end date).
+    dropped = {"Expired": 0, "Unknown": 0}
+    keep = {}
+    for k, c in contracts.items():
+        s = c["status"]
+        if DROP_EXPIRED and s == "Expired":
+            dropped["Expired"] += 1
+            continue
+        if DROP_UNKNOWN and s == "Unknown":
+            dropped["Unknown"] += 1
+            continue
+        keep[k] = c
+    contracts = keep
+    print(f"  After drop policy: {len(contracts):,} kept "
+          f"(dropped {dropped['Expired']:,} Expired, {dropped['Unknown']:,} Unknown)")
+
     # Build JSONs
     print("\nBuilding dashboard JSONs...")
 
@@ -581,6 +630,7 @@ def main():
           f"${summary['ceiling_remaining_b']}B remaining")
 
     filters = build_filter_options(contracts)
+    config_mirror = build_config_mirror()
 
     # Write outputs
     outputs = {
@@ -588,6 +638,7 @@ def main():
         "vehicles.json":  vehicles_json,
         "summary.json":   summary,
         "filters.json":   filters,
+        "config.json":    config_mirror,
     }
 
     for fname, data in outputs.items():

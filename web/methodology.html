@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Methodology — DoD Contract Vehicles</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="shared/shared.css">
+    <style>
+        .page-nav { margin-top: 0.5rem; }
+        .page-nav a {
+            margin-right: 1rem;
+            font-weight: 600;
+            text-decoration: none;
+            color: var(--color-text-muted);
+        }
+        .page-nav a.active {
+            color: var(--color-accent);
+            border-bottom: 2px solid var(--color-accent);
+        }
+        .methodology-body {
+            max-width: 780px;
+            line-height: 1.7;
+        }
+        .methodology-body h2 {
+            margin-top: 2.2rem;
+            margin-bottom: 0.7rem;
+            font-family: 'DM Sans', sans-serif;
+            font-weight: 600;
+            color: var(--color-heading, #2A211A);
+        }
+        .methodology-body h3 {
+            margin-top: 1.6rem;
+            margin-bottom: 0.4rem;
+            font-family: 'DM Sans', sans-serif;
+            font-weight: 600;
+            font-size: 1.05rem;
+        }
+        .methodology-body code, .methodology-body pre {
+            background: var(--color-surface-alt, #F5EDE0);
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'SF Mono', Menlo, Monaco, monospace;
+            font-size: 0.9em;
+        }
+        .methodology-body pre {
+            padding: 12px 14px;
+            overflow-x: auto;
+        }
+        .methodology-body ul { padding-left: 1.3rem; }
+        .methodology-body li { margin-bottom: 0.35rem; }
+        .config-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 0.6rem 0 1.2rem;
+            font-size: 0.95rem;
+        }
+        .config-table th, .config-table td {
+            text-align: left;
+            padding: 8px 12px;
+            border-bottom: 1px solid var(--color-border, #E8DDD0);
+        }
+        .config-table th {
+            font-weight: 600;
+            width: 34%;
+            font-family: 'DM Sans', sans-serif;
+            color: var(--color-text-muted);
+        }
+        .config-table code { background: none; padding: 0; }
+        .note {
+            background: var(--color-surface-alt, #F5EDE0);
+            border-left: 3px solid var(--color-accent, #2D6A4F);
+            padding: 12px 16px;
+            margin: 1rem 0;
+            border-radius: 3px;
+        }
+        .as-of {
+            color: var(--color-text-muted);
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="site-container">
+        <header class="site-header">
+            <h1>DoD Contract Vehicles</h1>
+            <p class="site-subtitle">Methodology — how the dashboard is built</p>
+            <nav class="page-nav">
+                <a href="index.html">Contracts</a>
+                <a href="vehicles.html">Vehicles</a>
+                <a href="methodology.html" class="active">Methodology</a>
+            </nav>
+        </header>
+
+        <section class="methodology-body">
+            <p class="as-of">Data as of <span id="asOf">—</span>. Live configuration values are loaded from the
+               <code>config.yaml</code> that drove the last build.</p>
+
+            <h2>What this dashboard shows</h2>
+            <p>Active DoD contract vehicles — IDIQs, BPAs, GWACs, and other awards — with scope, ceiling,
+               obligations, and remaining capacity. Built to help program offices find existing vehicles
+               to place orders on instead of starting a new procurement.</p>
+            <ul>
+                <li><strong>Contracts</strong> — one row per contract award (task order, call, or standalone).</li>
+                <li><strong>Vehicles</strong> — orders rolled up by <code>parent_award_id_piid</code>, so one
+                    row per parent IDIQ / BPA.</li>
+            </ul>
+
+            <h2>Data sources</h2>
+            <ul>
+                <li><a href="https://www.usaspending.gov/download_center/custom_award_data">USASpending bulk archives</a>
+                    — transaction-level contract records, full column set.</li>
+                <li><a href="https://sam.gov">SAM.gov</a> monthly entity extract — supplements contractor details
+                    (UEI, legal name, registration date, location).</li>
+            </ul>
+            <p>Scope: toptier agency <code id="cfgAgencyCode">—</code>
+               (DoD), last <code id="cfgFYBack">—</code> fiscal years of transactions, rebuilt monthly.</p>
+
+            <h2>Status classification</h2>
+            <p>We classify each contract as <strong>Active</strong>, <strong>Expiring Soon</strong>,
+               <strong>Expired</strong>, or <strong>Unknown</strong>, based on an
+               <em>effective end date</em> that combines multiple source fields:</p>
+            <pre>effective_end = max(
+    <span id="cfgEffFields">—</span>
+)</pre>
+
+            <p>This matters because the plain <code>period_of_performance_current_end_date</code>
+               doesn't reflect unexercised options, and it's absent on IDV masters — where
+               <code>ordering_period_end_date</code> is the real "can you still order against this"
+               date. Taking the max across these fields gets us the most generous true end date.</p>
+
+            <h3>Buckets</h3>
+            <ul>
+                <li><strong>Active</strong> — effective end is more than <code id="cfgEsDays">—</code> days out.</li>
+                <li><strong>Expiring Soon</strong> — effective end within the next <code id="cfgEsDays2">—</code> days.</li>
+                <li><strong>Expired</strong> — effective end before today.</li>
+                <li><strong>Unknown</strong> — no parseable date in any of the effective-end fields.</li>
+            </ul>
+
+            <h3>Drop policy</h3>
+            <ul>
+                <li>Drop Expired: <code id="cfgDropExp">—</code></li>
+                <li>Drop Unknown: <code id="cfgDropUnk">—</code></li>
+            </ul>
+            <p>By default we drop both. An expired contract's ordering period has lapsed, so you can't
+               place new orders against it. An Unknown contract has no end date in the source and
+               can't be verified without going back to SAM.gov anyway — so it's noise for this use case.</p>
+
+            <h2>Vehicle rollup</h2>
+            <p>The Vehicles view groups contracts by <code>parent_award_id_piid</code>. For each vehicle:</p>
+            <ul>
+                <li><strong>Status</strong> — classified from the <em>latest effective end across its orders</em>.</li>
+                <li><strong>Total Ceiling / Obligated</strong> — summed across orders; <em>not</em> the IDV's own
+                    ceiling field.</li>
+                <li><strong>Active Orders</strong> — count of task orders currently Active or Expiring Soon.</li>
+                <li><strong>Contractors / NAICS / States</strong> — unique values seen across orders.</li>
+            </ul>
+            <div class="note">
+                <strong>Caveat on ceiling rollup:</strong> summing order-level ceilings can overcount
+                (if options share a ceiling) or undercount (if the IDV ceiling hasn't been fully
+                ordered against). Treat the totals as approximate.
+            </div>
+
+            <h2>Other caveats</h2>
+            <ul>
+                <li><code>ceiling_remaining = potential_total_value_of_award − total_dollars_obligated</code>.
+                    USASpending's <code>potential_total_value_of_award</code> reflects the latest
+                    modification and may lag real ceiling changes.</li>
+                <li><code>award_description</code> is often terse ("IT SERVICES"). For real scope, check the
+                    solicitation on SAM.gov.</li>
+                <li>Geographic coverage is place-of-performance state, not the vehicle's authorized
+                    geographic scope.</li>
+                <li>Aggregation keeps only the latest transaction's values per contract
+                    (by <code>action_date</code>); <code>federal_action_obligation</code> is summed
+                    across all mods as a fallback when <code>total_dollars_obligated</code> is missing.</li>
+            </ul>
+
+            <h2>Live config</h2>
+            <p>Pulled from the <code>config.json</code> that was emitted by the last build.</p>
+            <table class="config-table" id="cfgTable">
+                <tr><th>expiring_soon_days</th><td id="tblEsDays">—</td></tr>
+                <tr><th>effective_end_fields</th><td id="tblEffFields">—</td></tr>
+                <tr><th>drop_expired</th><td id="tblDropExp">—</td></tr>
+                <tr><th>drop_unknown</th><td id="tblDropUnk">—</td></tr>
+                <tr><th>fetch.agency_code</th><td id="tblAgency">—</td></tr>
+                <tr><th>fetch.fiscal_years_back</th><td id="tblFYBack">—</td></tr>
+            </table>
+
+            <h2>Source</h2>
+            <p>Pipeline code lives on
+               <a href="https://github.com/abigailhaddad/dod-contract-vehicles">GitHub</a>.
+               Full config at <code>config.yaml</code>.</p>
+        </section>
+
+        <footer class="site-footer">
+            <p>
+                Data from <a href="https://www.usaspending.gov/">USASpending bulk archives</a>
+                &middot; Code on <a href="https://github.com/abigailhaddad/dod-contract-vehicles">GitHub</a>
+            </p>
+        </footer>
+    </div>
+
+    <script>
+        (async function() {
+            try {
+                const resp = await fetch('data/config.json');
+                const cfg = await resp.json();
+
+                const set = (id, val) => {
+                    const el = document.getElementById(id);
+                    if (el) el.textContent = val;
+                };
+
+                set('asOf', cfg.as_of || '—');
+                set('cfgAgencyCode', cfg.fetch.agency_code);
+                set('cfgFYBack', cfg.fetch.fiscal_years_back);
+                set('cfgEsDays', cfg.classification.expiring_soon_days);
+                set('cfgEsDays2', cfg.classification.expiring_soon_days);
+                set('cfgDropExp', String(cfg.classification.drop_expired));
+                set('cfgDropUnk', String(cfg.classification.drop_unknown));
+
+                const fieldsList = cfg.classification.effective_end_fields || [];
+                document.getElementById('cfgEffFields').textContent = fieldsList.join(',\n    ');
+
+                set('tblEsDays', cfg.classification.expiring_soon_days);
+                document.getElementById('tblEffFields').innerHTML =
+                    fieldsList.map(f => '<code>' + f + '</code>').join('<br>');
+                set('tblDropExp', String(cfg.classification.drop_expired));
+                set('tblDropUnk', String(cfg.classification.drop_unknown));
+                set('tblAgency', cfg.fetch.agency_code);
+                set('tblFYBack', cfg.fetch.fiscal_years_back);
+            } catch (err) {
+                console.error('Failed to load config.json:', err);
+            }
+        })();
+    </script>
+</body>
+</html>

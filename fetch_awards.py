@@ -36,10 +36,20 @@ import requests
 ARCHIVE_BASE   = "https://files.usaspending.gov/award_data_archive/"
 CHECKPOINT_DIR = Path("data/bulk_checkpoints")
 OUTPUT_CSV     = Path("data/dod_contracts_bulk.csv")
+CONFIG_PATH    = Path("config.yaml")
 
-# DoD toptier agency code -- includes Army, Navy, Air Force, Marines,
-# defense agencies (DISA, DARPA, DLA, MDA, etc.) as sub-agencies
-DOD_AGENCIES = ["097"]
+# Scope (agency code, fiscal year window) is read from config.yaml so it
+# stays in sync with build_dashboard and the methodology page.
+try:
+    import yaml  # optional; CLI flags still work if yaml isn't installed
+    with open(CONFIG_PATH) as _f:
+        _CONFIG = yaml.safe_load(_f)
+    DOD_AGENCIES     = [str(_CONFIG["fetch"]["agency_code"])]
+    FISCAL_YEARS_BACK = int(_CONFIG["fetch"]["fiscal_years_back"])
+except (FileNotFoundError, ImportError):
+    # Fallback defaults for environments without pyyaml / config.yaml
+    DOD_AGENCIES     = ["097"]
+    FISCAL_YEARS_BACK = 5
 
 
 def _get_latest_datestamp(fallback: str = "20260306") -> str:
@@ -65,7 +75,7 @@ def _current_fy() -> int:
     return today.year + 1 if today.month >= 10 else today.year
 
 
-DEFAULT_YEARS = list(range(_current_fy(), _current_fy() - 5, -1))  # 5 years
+DEFAULT_YEARS = list(range(_current_fy(), _current_fy() - FISCAL_YEARS_BACK, -1))
 
 # No column filter -- keep ALL columns from the source CSV.
 # USASpending bulk archives have ~200 columns. Re-downloading is expensive
