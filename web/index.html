@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DoD Contract Vehicles</title>
+    <title>DoD Contract Vehicles &mdash; Rollup</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
@@ -24,17 +24,17 @@
         }
         .dataTables_wrapper .row { margin: 0; }
         .dataTables_wrapper .row > div { padding: 0; }
-        .desc-cell {
+        .list-cell {
             display: inline-block;
-            max-width: 320px;
+            max-width: 260px;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
             vertical-align: middle;
             cursor: pointer;
         }
-        .desc-cell:hover,
-        .desc-cell:focus {
+        .list-cell:hover,
+        .list-cell:focus {
             white-space: normal;
             overflow: visible;
             max-width: none;
@@ -46,6 +46,55 @@
         .status-unknown { color: var(--color-text-muted); font-weight: 500; }
         .chart-card canvas { max-height: 220px; }
         .chart-card.chart-tall canvas { max-height: 320px; }
+        .piid-link {
+            color: var(--color-accent);
+            text-decoration: none;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .piid-link:hover { text-decoration: underline; }
+        .orders-popover {
+            background: var(--color-bg);
+            border: 1px solid var(--color-border);
+            border-radius: var(--card-radius);
+            padding: 1.25rem 1.5rem;
+            box-shadow: var(--shadow-md);
+            max-width: 900px;
+            width: 94vw;
+            max-height: 85vh;
+            overflow-y: auto;
+        }
+        .orders-popover h3 {
+            margin: 0 0 0.25rem;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 1.1rem;
+        }
+        .orders-popover .orders-meta {
+            color: var(--color-text-muted);
+            font-size: 0.875rem;
+            margin-bottom: 0.9rem;
+        }
+        .orders-popover table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.875rem;
+        }
+        .orders-popover th, .orders-popover td {
+            text-align: left;
+            padding: 6px 10px;
+            border-bottom: 1px solid var(--color-border);
+            vertical-align: top;
+        }
+        .orders-popover th {
+            font-family: 'DM Sans', sans-serif;
+            font-weight: 600;
+            color: var(--color-text-muted);
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 0.03em;
+        }
+        .orders-popover td.num { text-align: right; font-variant-numeric: tabular-nums; }
+        .orders-popover .empty { color: var(--color-text-muted); font-style: italic; padding: 1rem 0; }
     </style>
 </head>
 <body>
@@ -53,18 +102,15 @@
         This is experimental — please do not rely on this.
     </div>
     <div class="site-container">
-        <!-- Header -->
         <header class="site-header">
             <h1>DoD Contract Vehicles</h1>
-            <p class="site-subtitle">Task orders, BPA calls, and standalone DoD contracts. For the parent IDIQs/BPAs themselves, see the Vehicles tab.</p>
+            <p class="site-subtitle">Parent IDIQs, BPAs, GWACs, and FSS schedules — the ordering vehicles themselves, with rolled-up stats across every order placed under each.</p>
             <nav class="page-nav">
-                <a href="index.html" class="active">Contracts</a>
-                <a href="vehicles.html">Vehicles</a>
+                <a href="index.html" class="active">Dashboard</a>
                 <a href="methodology.html">Methodology</a>
             </nav>
         </header>
 
-        <!-- Toolbar + Filter Bar -->
         <div id="toolbarButtons" class="toolbar-row"></div>
         <div class="filters-bar-container">
             <div class="filters-bar" id="filtersBar">
@@ -72,15 +118,14 @@
             </div>
         </div>
 
-        <!-- Stats Cards -->
         <div class="stats-row">
             <div class="stat-card">
-                <h3>Active Contracts</h3>
+                <h3>Active Vehicles</h3>
                 <div class="stat-value" id="statActive">--</div>
             </div>
             <div class="stat-card">
-                <h3>Expiring &lt; 6 mo</h3>
-                <div class="stat-value" id="statExpiring">--</div>
+                <h3>Total Orders</h3>
+                <div class="stat-value" id="statOrders">--</div>
             </div>
             <div class="stat-card">
                 <h3>Total Ceiling</h3>
@@ -96,51 +141,47 @@
             </div>
         </div>
 
-        <!-- Charts -->
         <section class="charts-section">
             <div class="charts-grid">
                 <div class="chart-card chart-tall">
-                    <h3>Top sub-agencies (by contract count)</h3>
+                    <h3>Top sub-agencies (by vehicle count)</h3>
                     <canvas id="chartAgency"></canvas>
                 </div>
                 <div class="chart-card">
-                    <h3>Expiring by month (next 24 mo)</h3>
-                    <small class="text-muted">Contracts whose PoP end falls in each month</small>
-                    <canvas id="chartExpiring"></canvas>
+                    <h3>Ceiling utilization buckets</h3>
+                    <small class="text-muted">Share of ceiling obligated across all orders on the vehicle</small>
+                    <canvas id="chartUtil"></canvas>
                 </div>
             </div>
         </section>
 
-        <!-- Data Table -->
-        <div id="loadingBox" class="loading-text" style="padding: 2rem 0;">Loading contracts...</div>
+        <div id="loadingBox" class="loading-text" style="padding: 2rem 0;">Loading vehicle rollup...</div>
         <div class="table-scroll-wrapper" id="tableWrap" style="display:none;">
-            <table id="contractsTable" class="table" style="width:100%">
+            <table id="vehiclesTable" class="table" style="width:100%">
                 <thead>
                     <tr>
                         <th>Status</th>
-                        <th>PIID</th>
                         <th>Parent PIID</th>
-                        <th>Contractor</th>
+                        <th>Type</th>
                         <th>Sub-Agency</th>
                         <th>Office</th>
-                        <th>Description</th>
+                        <th class="dt-right">Orders</th>
+                        <th class="dt-right">Active</th>
+                        <th class="dt-right">Contractors</th>
+                        <th>Top Contractors</th>
                         <th>NAICS</th>
-                        <th>Pricing</th>
-                        <th>Vehicle Type</th>
-                        <th>PoP End</th>
-                        <th>Potential End</th>
-                        <th class="dt-right">Ceiling</th>
+                        <th>Latest End</th>
+                        <th class="dt-right">Total Ceiling</th>
                         <th class="dt-right">Obligated</th>
                         <th class="dt-right">Remaining</th>
-                        <th>State</th>
-                        <th>Link</th>
+                        <th class="dt-right">% Used</th>
+                        <th>States</th>
                     </tr>
                 </thead>
                 <tbody></tbody>
             </table>
         </div>
 
-        <!-- Footer -->
         <footer class="site-footer">
             <p>
                 Data from <a href="https://www.usaspending.gov/">USASpending bulk archives</a>
@@ -150,7 +191,6 @@
         </footer>
     </div>
 
-    <!-- JS -->
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
     <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
@@ -159,32 +199,25 @@
     <script>
     window.API_BASE = '';
 
-    // ============================================
-    // Column / filter config
-    // ============================================
     const COLUMNS = [
-        { name: 'Status',         field: 'status',         filterType: 'multiselect', index: 0 },
-        { name: 'PIID',           field: 'piid',           filterType: 'text',        index: 1 },
-        { name: 'Parent PIID',    field: 'parent_piid',    filterType: 'text',        index: 2 },
-        { name: 'Contractor',     field: 'contractor',     filterType: 'text',        index: 3 },
-        { name: 'Sub-Agency',     field: 'sub_agency',     filterType: 'multiselect', index: 4 },
-        { name: 'Office',         field: 'awarding_office',filterType: 'multiselect', index: 5 },
-        { name: 'Description',    field: 'description',    filterType: 'text',        index: 6 },
-        { name: 'NAICS',          field: 'naics',          filterType: 'text',        index: 7 },
-        { name: 'Pricing',        field: 'pricing',        filterType: 'multiselect', index: 8 },
-        { name: 'Vehicle Type',   field: 'vehicle_type',   filterType: 'multiselect', index: 9 },
-        { name: 'PoP End',        field: 'pop_end',        filterType: 'daterange',   index: 10 },
-        { name: 'Potential End',  field: 'pop_potential_end', filterType: 'daterange', index: 11 },
-        { name: 'Ceiling',        field: 'ceiling',        filterType: 'range', index: 12, format: 'currency' },
-        { name: 'Obligated',      field: 'obligated',      filterType: 'range', index: 13, format: 'currency' },
-        { name: 'Remaining',      field: 'ceiling_remaining', filterType: 'range', index: 14, format: 'currency' },
-        { name: 'State',          field: 'place_state',    filterType: 'multiselect', index: 15 },
-        { name: 'Link',           field: 'link',           filterType: null,          index: 16 },
+        { name: 'Status',        field: 'status',         filterType: 'multiselect', index: 0 },
+        { name: 'Parent PIID',   field: 'parent_piid',    filterType: 'text',        index: 1 },
+        { name: 'Type',          field: 'parent_award_type', filterType: 'multiselect', index: 2 },
+        { name: 'Sub-Agency',    field: 'sub_agency',     filterType: 'multiselect', index: 3 },
+        { name: 'Office',        field: 'awarding_office',filterType: 'multiselect', index: 4 },
+        { name: 'Orders',        field: 'order_count',    filterType: 'range',       index: 5 },
+        { name: 'Active Orders', field: 'active_orders',  filterType: 'range',       index: 6 },
+        { name: 'Contractors',   field: 'contractor_count', filterType: 'range',     index: 7 },
+        { name: 'Contractor Name', field: 'contractors',  filterType: 'text',        index: 8 },
+        { name: 'NAICS',         field: 'naics_codes',    filterType: 'text',        index: 9 },
+        { name: 'Latest End',    field: 'latest_end',     filterType: 'daterange',   index: 10 },
+        { name: 'Total Ceiling', field: 'total_ceiling',  filterType: 'range', index: 11, format: 'currency' },
+        { name: 'Obligated',     field: 'total_obligated',filterType: 'range', index: 12, format: 'currency' },
+        { name: 'Remaining',     field: 'ceiling_remaining', filterType: 'range', index: 13, format: 'currency' },
+        { name: '% Used',        field: 'pct_ceiling_used', filterType: 'range',    index: 14 },
+        { name: 'States',        field: 'states',         filterType: 'multiselect', index: 15 },
     ];
 
-    // ============================================
-    // Chart.js defaults / palette
-    // ============================================
     Chart.defaults.font.family = "'Source Sans 3', sans-serif";
     Chart.defaults.color = '#7A6E62';
 
@@ -208,9 +241,6 @@
         padding: 10,
     };
 
-    // ============================================
-    // Formatters
-    // ============================================
     function fmtDollarsShort(n) {
         if (n == null || isNaN(n)) return '--';
         const abs = Math.abs(n);
@@ -229,36 +259,68 @@
         return '<span class="' + cls + '">' + escapeHtml(s) + '</span>';
     }
 
-    // ============================================
-    // Charts
-    // ============================================
-    let chartAgency = null, chartExpiring = null;
+    // --- Custom text-match behavior for array fields (contractors, naics_codes).
+    // The default _rowMatches in shared.js handles arrays as multiselect but not
+    // substring text-search. We customize by subclassing.
+    class VehicleFilterManager extends ServerSideFilterManager {
+        _rowMatches(row) {
+            for (const [field, filter] of Object.entries(this.activeFilters)) {
+                const val = row[field];
+                if (filter.type === 'multiselect') {
+                    if (Array.isArray(val)) {
+                        const anyMatch = val.some(v => filter.values.includes(String(v)));
+                        if (!anyMatch) return false;
+                    } else {
+                        if (val == null || !filter.values.includes(String(val))) return false;
+                    }
+                } else if (filter.type === 'range') {
+                    const num = val == null || val === '' ? null : Number(val);
+                    if (num === null || isNaN(num)) return false;
+                    if (filter.min != null && num < filter.min) return false;
+                    if (filter.max != null && num > filter.max) return false;
+                } else if (filter.type === 'daterange') {
+                    if (!val) return false;
+                    const v = String(val);
+                    if (filter.min && v < filter.min) return false;
+                    if (filter.max && v > filter.max) return false;
+                } else if (filter.type === 'text') {
+                    const terms = String(filter.value).split(',').map(t => t.trim().toLowerCase()).filter(t => t);
+                    let hay;
+                    if (Array.isArray(val)) {
+                        hay = val.map(v => String(v).toLowerCase()).join(' | ');
+                    } else if (val == null) {
+                        return false;
+                    } else {
+                        hay = String(val).toLowerCase();
+                    }
+                    const anyMatch = terms.some(t => hay.includes(t));
+                    if (!anyMatch) return false;
+                }
+            }
+            return true;
+        }
+    }
+
+    let chartAgency = null, chartUtil = null;
 
     function createCharts() {
         chartAgency = new Chart(document.getElementById('chartAgency'), {
             type: 'bar',
-            data: { labels: [], datasets: [{ label: 'Contracts', data: [], backgroundColor: CHART_COLORS.primary, borderWidth: 0 }] },
+            data: { labels: [], datasets: [{ label: 'Vehicles', data: [], backgroundColor: CHART_COLORS.primary, borderWidth: 0 }] },
             options: {
                 indexAxis: 'y',
                 responsive: true, maintainAspectRatio: false,
                 plugins: { legend: { display: false }, tooltip: CHART_TOOLTIP },
                 scales: {
-                    x: {
-                        beginAtZero: true,
-                        grid: { color: CHART_COLORS.grid },
-                        ticks: {
-                            color: CHART_COLORS.tickLabel,
-                            callback: v => v >= 1000 ? (v / 1000).toFixed(0) + 'K' : v,
-                        },
-                    },
+                    x: { beginAtZero: true, grid: { color: CHART_COLORS.grid }, ticks: { color: CHART_COLORS.tickLabel } },
                     y: { grid: { display: false }, ticks: { color: CHART_COLORS.tickLabel, font: { size: 11 } } },
                 },
             },
         });
 
-        chartExpiring = new Chart(document.getElementById('chartExpiring'), {
+        chartUtil = new Chart(document.getElementById('chartUtil'), {
             type: 'bar',
-            data: { labels: [], datasets: [{ label: 'Expiring', data: [], backgroundColor: CHART_COLORS.highlight, borderWidth: 0 }] },
+            data: { labels: [], datasets: [{ label: 'Vehicles', data: [], backgroundColor: CHART_COLORS.highlight, borderWidth: 0 }] },
             options: {
                 responsive: true, maintainAspectRatio: false,
                 plugins: { legend: { display: false }, tooltip: CHART_TOOLTIP },
@@ -271,10 +333,7 @@
                             callback: v => v >= 1000 ? (v / 1000).toFixed(0) + 'K' : v,
                         },
                     },
-                    x: {
-                        grid: { display: false },
-                        ticks: { color: CHART_COLORS.tickLabel, maxRotation: 45, autoSkip: true, maxTicksLimit: 24 },
-                    },
+                    x: { grid: { display: false }, ticks: { color: CHART_COLORS.tickLabel } },
                 },
             },
         });
@@ -292,76 +351,71 @@
         chartAgency.data.datasets[0].data = topAgencies.map(x => x[1]);
         chartAgency.update();
 
-        // Expiring by month (next 24 months from today)
-        const today = new Date();
-        today.setDate(1);
-        const months = [];
-        const monthKey = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
-        const monthLabel = (d) => d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
-        const counts = {};
-        for (let i = 0; i < 24; i++) {
-            const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
-            const k = monthKey(d);
-            months.push({ key: k, label: monthLabel(d) });
-            counts[k] = 0;
-        }
+        // Ceiling utilization buckets
+        const buckets = [
+            { label: '0%', min: 0, max: 0.0001 },
+            { label: '1-25%', min: 0.0001, max: 25 },
+            { label: '25-50%', min: 25, max: 50 },
+            { label: '50-75%', min: 50, max: 75 },
+            { label: '75-99%', min: 75, max: 99.9999 },
+            { label: '100%+', min: 99.9999, max: Infinity },
+        ];
+        const bucketCounts = buckets.map(() => 0);
         for (const r of rows) {
-            if (!r.pop_end) continue;
-            const k = r.pop_end.slice(0, 7);
-            if (k in counts) counts[k]++;
+            const p = Number(r.pct_ceiling_used);
+            if (!isFinite(p)) continue;
+            for (let i = 0; i < buckets.length; i++) {
+                if (p >= buckets[i].min && p < buckets[i].max) { bucketCounts[i]++; break; }
+            }
         }
-        chartExpiring.data.labels = months.map(m => m.label);
-        chartExpiring.data.datasets[0].data = months.map(m => counts[m.key]);
-        chartExpiring.update();
+        chartUtil.data.labels = buckets.map(b => b.label);
+        chartUtil.data.datasets[0].data = bucketCounts;
+        chartUtil.update();
     }
 
     function updateStats(rows) {
-        // "Active" includes Expiring Soon (both are in-force); the Expiring
-        // card shows the narrow subset.
-        const expiring = rows.filter(r => r.status === 'Expiring Soon').length;
+        // "Active" includes Expiring Soon (both are in-force).
         const active = rows.filter(r => r.status === 'Active' || r.status === 'Expiring Soon').length;
-        let ceiling = 0, obligated = 0, remaining = 0;
+        let orders = 0, ceiling = 0, remaining = 0;
         const contractorSet = new Set();
         for (const r of rows) {
-            if (typeof r.ceiling === 'number') ceiling += r.ceiling;
-            if (typeof r.obligated === 'number') obligated += r.obligated;
+            if (typeof r.order_count === 'number') orders += r.order_count;
+            if (typeof r.total_ceiling === 'number') ceiling += r.total_ceiling;
             if (typeof r.ceiling_remaining === 'number') remaining += r.ceiling_remaining;
-            if (r.contractor) contractorSet.add(r.contractor);
+            if (Array.isArray(r.contractors)) {
+                for (const c of r.contractors) contractorSet.add(c);
+            }
         }
         document.getElementById('statActive').textContent = active.toLocaleString();
-        document.getElementById('statExpiring').textContent = expiring.toLocaleString();
+        document.getElementById('statOrders').textContent = orders.toLocaleString();
         document.getElementById('statCeiling').textContent = fmtDollarsShort(ceiling);
         document.getElementById('statRemaining').textContent = fmtDollarsShort(remaining);
         document.getElementById('statContractors').textContent = contractorSet.size.toLocaleString();
     }
 
-    // ============================================
-    // Init
-    // ============================================
-    let allContracts = [];
+    let allVehicles = [];
     let filterManager = null;
     let table = null;
 
     async function init() {
         createCharts();
 
-        const [summary, contracts] = await Promise.all([
+        const [summary, vehicles] = await Promise.all([
             fetch('data/summary.json').then(r => r.json()),
-            fetch('data/contracts.json').then(r => r.json()),
+            fetch('data/vehicles.json').then(r => r.json()),
         ]);
 
-        allContracts = contracts;
+        allVehicles = vehicles;
         document.getElementById('asOf').textContent = summary.as_of || '';
 
-        // Filter manager (client-side)
-        filterManager = new ServerSideFilterManager({
-            tableSelector: '#contractsTable',
+        filterManager = new VehicleFilterManager({
+            tableSelector: '#vehiclesTable',
             columns: COLUMNS,
             filterBarId: 'filtersBar',
             syncURL: true,
             showCopyLinkButton: true,
             clientSide: true,
-            data: allContracts,
+            data: allVehicles,
             onFilterChange: function () {
                 const filtered = filterManager.getFilteredData();
                 updateStats(filtered);
@@ -369,10 +423,8 @@
             },
         });
 
-        // Register the DataTables client-side search function that reads activeFilters.
-        // Only one search function is registered per page; it uses the data directly.
         $.fn.dataTable.ext.search.push(function (settings, searchData, dataIndex, rowData) {
-            if (settings.nTable.id !== 'contractsTable') return true;
+            if (settings.nTable.id !== 'vehiclesTable') return true;
             if (!filterManager) return true;
             return filterManager._rowMatches(rowData);
         });
@@ -380,83 +432,80 @@
         document.getElementById('loadingBox').style.display = 'none';
         document.getElementById('tableWrap').style.display = '';
 
-        table = $('#contractsTable').DataTable({
-            data: allContracts,
+        table = $('#vehiclesTable').DataTable({
+            data: allVehicles,
             deferRender: true,
             columns: [
                 { data: 'status', render: (d, t) => t === 'display' ? statusRender(d) : (d || '') },
                 {
-                    data: 'piid',
-                    render: (d, t, row) => {
+                    data: 'parent_piid',
+                    defaultContent: '',
+                    render: (d, t) => {
                         if (t !== 'display') return d || '';
                         if (!d) return '';
-                        if (row.link) return '<a href="' + escapeHtml(row.link) + '" target="_blank" rel="noopener">' + escapeHtml(d) + '</a>';
-                        return escapeHtml(d);
+                        return '<a class="piid-link" data-piid="' + escapeHtml(d) + '" tabindex="0" title="Show orders on this vehicle">' + escapeHtml(d) + '</a>';
                     },
                 },
-                { data: 'parent_piid', defaultContent: '', render: (d, t) => t === 'display' ? escapeHtml(d || '') : (d || '') },
-                { data: 'contractor', defaultContent: '', render: (d, t) => t === 'display' ? escapeHtml(d || '') : (d || '') },
+                { data: 'parent_award_type', defaultContent: '', render: (d, t) => t === 'display' ? escapeHtml(d || '') : (d || '') },
                 { data: 'sub_agency', defaultContent: '', render: (d, t) => t === 'display' ? escapeHtml(d || '') : (d || '') },
                 { data: 'awarding_office', defaultContent: '', render: (d, t) => t === 'display' ? escapeHtml(d || '') : (d || '') },
+                { data: 'order_count', className: 'dt-right', render: (d, t) => t === 'display' ? (d == null ? '' : d.toLocaleString()) : (d || 0) },
+                { data: 'active_orders', className: 'dt-right', render: (d, t) => t === 'display' ? (d == null ? '' : d.toLocaleString()) : (d || 0) },
+                { data: 'contractor_count', className: 'dt-right', render: (d, t) => t === 'display' ? (d == null ? '' : d.toLocaleString()) : (d || 0) },
                 {
-                    data: 'description',
-                    defaultContent: '',
-                    render: (d, t) => {
-                        if (t !== 'display') return d || '';
-                        if (!d) return '';
-                        return '<span class="desc-cell" tabindex="0" title="' + escapeHtml(d) + '">' + escapeHtml(d) + '</span>';
-                    },
-                },
-                {
-                    data: 'naics',
-                    defaultContent: '',
-                    render: (d, t, row) => {
-                        if (t !== 'display') return d || '';
-                        if (!d) return '';
-                        const title = row.naics_desc ? ' title="' + escapeHtml(row.naics_desc) + '"' : '';
-                        return '<span' + title + '>' + escapeHtml(d) + '</span>';
-                    },
-                },
-                { data: 'pricing', defaultContent: '', render: (d, t) => t === 'display' ? escapeHtml(d || '') : (d || '') },
-                { data: 'vehicle_type', defaultContent: '', render: (d, t) => t === 'display' ? escapeHtml(d || '') : (d || '') },
-                { data: 'pop_end', defaultContent: '' },
-                { data: 'pop_potential_end', defaultContent: '' },
-                {
-                    data: 'ceiling',
-                    className: 'dt-right',
-                    render: (d, t) => t === 'display' ? fmtDollarsShort(d) : (d || 0),
-                },
-                {
-                    data: 'obligated',
-                    className: 'dt-right',
-                    render: (d, t) => t === 'display' ? fmtDollarsShort(d) : (d || 0),
-                },
-                {
-                    data: 'ceiling_remaining',
-                    className: 'dt-right',
-                    render: (d, t) => t === 'display' ? fmtDollarsShort(d) : (d || 0),
-                },
-                { data: 'place_state', defaultContent: '' },
-                {
-                    data: 'link',
+                    data: 'contractors',
                     orderable: false,
                     render: (d, t) => {
-                        if (t !== 'display') return '';
-                        if (!d) return '';
-                        return '<a href="' + escapeHtml(d) + '" target="_blank" rel="noopener">View</a>';
+                        if (t !== 'display') return Array.isArray(d) ? d.join(' | ') : (d || '');
+                        if (!d || !d.length) return '';
+                        const full = d.join(' | ');
+                        const preview = d.slice(0, 3).join(', ') + (d.length > 3 ? ', +' + (d.length - 3) + ' more' : '');
+                        return '<span class="list-cell" tabindex="0" title="' + escapeHtml(full) + '">' + escapeHtml(preview) + '</span>';
+                    },
+                },
+                {
+                    data: 'naics_codes',
+                    orderable: false,
+                    render: (d, t) => {
+                        if (t !== 'display') return Array.isArray(d) ? d.join(' | ') : (d || '');
+                        if (!d || !d.length) return '';
+                        const preview = d.slice(0, 3).join(', ') + (d.length > 3 ? ', +' + (d.length - 3) : '');
+                        return '<span class="list-cell" tabindex="0" title="' + escapeHtml(d.join(', ')) + '">' + escapeHtml(preview) + '</span>';
+                    },
+                },
+                { data: 'latest_end', defaultContent: '' },
+                { data: 'total_ceiling', className: 'dt-right', render: (d, t) => t === 'display' ? fmtDollarsShort(d) : (d || 0) },
+                { data: 'total_obligated', className: 'dt-right', render: (d, t) => t === 'display' ? fmtDollarsShort(d) : (d || 0) },
+                { data: 'ceiling_remaining', className: 'dt-right', render: (d, t) => t === 'display' ? fmtDollarsShort(d) : (d || 0) },
+                {
+                    data: 'pct_ceiling_used',
+                    className: 'dt-right',
+                    render: (d, t) => {
+                        if (t !== 'display') return d == null ? 0 : d;
+                        return d == null ? '--' : (Math.round(d * 10) / 10) + '%';
+                    },
+                },
+                {
+                    data: 'states',
+                    orderable: false,
+                    render: (d, t) => {
+                        if (t !== 'display') return Array.isArray(d) ? d.join(' ') : (d || '');
+                        if (!d || !d.length) return '';
+                        const preview = d.slice(0, 5).join(', ') + (d.length > 5 ? ', +' + (d.length - 5) : '');
+                        return '<span class="list-cell" tabindex="0" title="' + escapeHtml(d.join(', ')) + '">' + escapeHtml(preview) + '</span>';
                     },
                 },
             ],
             pageLength: 25,
             lengthMenu: [10, 25, 50, 100, 250],
-            order: [[14, 'desc']], // ceiling_remaining desc
+            order: [[13, 'desc']], // ceiling_remaining desc
             language: {
-                emptyTable: 'No contracts match these filters',
-                zeroRecords: 'No contracts match these filters',
+                emptyTable: 'No vehicles match these filters',
+                zeroRecords: 'No vehicles match these filters',
                 thousands: ',',
-                info: 'Showing _START_ to _END_ of _TOTAL_ contracts',
+                info: 'Showing _START_ to _END_ of _TOTAL_ vehicles',
                 infoFiltered: ' (filtered from _MAX_ total)',
-                infoEmpty: 'No contracts',
+                infoEmpty: 'No vehicles',
             },
             pagingType: 'simple_numbers',
             dom: '<"d-flex justify-content-between align-items-center"lip>rt<"d-flex justify-content-between align-items-center"lip>',
@@ -464,24 +513,73 @@
 
         filterManager.init(table);
 
-        // CSV download button (client-side, uses current filter state)
+        // CSV download (client-side)
         const toolbarEl = document.getElementById('toolbarButtons');
         const csvBtn = document.createElement('button');
         csvBtn.className = 'csv-download-btn';
         csvBtn.textContent = 'Download CSV';
-        csvBtn.title = 'Download filtered contracts as CSV';
+        csvBtn.title = 'Download filtered vehicles as CSV';
         csvBtn.addEventListener('click', () => {
             const rows = filterManager.getFilteredData();
-            downloadCSV(rows, COLUMNS, 'dod_contracts.csv');
+            downloadCSV(rows, COLUMNS, 'dod_vehicles.csv');
         });
         toolbarEl.appendChild(csvBtn);
 
-        // Initial stats / charts reflect active filter state (may be empty)
-        const initial = filterManager.getFilteredData().length
-            ? filterManager.getFilteredData()
-            : allContracts;
+        // Drill-down: click a vehicle's PIID to see its orders.
+        $('#vehiclesTable tbody').on('click', 'a.piid-link', function(e) {
+            e.preventDefault();
+            const piid = $(this).data('piid');
+            const vehicle = allVehicles.find(v => v.parent_piid === piid);
+            if (vehicle) showOrdersModal(vehicle);
+        });
+
+        const initial = filterManager.getFilteredData();
         updateStats(initial);
         updateCharts(initial);
+    }
+
+    function showOrdersModal(v) {
+        const orders = v.top_orders || [];
+        const totalOrders = v.order_count || 0;
+        const activeOrders = v.active_orders || 0;
+
+        let body;
+        if (!orders.length) {
+            body = '<div class="empty">No order-level data captured for this vehicle' +
+                   (totalOrders ? ' (expired orders excluded)' : '') + '.</div>';
+        } else {
+            const rows = orders.map(o => {
+                const statusCls = o.status === 'Active' ? 'status-active' :
+                                  o.status === 'Expiring Soon' ? 'status-expiring' :
+                                  o.status === 'Expired' ? 'status-expired' : 'status-unknown';
+                const piidCell = o.link
+                    ? '<a href="' + escapeHtml(o.link) + '" target="_blank" rel="noopener">' + escapeHtml(o.piid || '') + '</a>'
+                    : escapeHtml(o.piid || '');
+                return '<tr>' +
+                    '<td>' + piidCell + '</td>' +
+                    '<td>' + escapeHtml(o.contractor || '') + '</td>' +
+                    '<td class="num">' + fmtDollarsShort(o.ceiling) + '</td>' +
+                    '<td class="num">' + fmtDollarsShort(o.obligated) + '</td>' +
+                    '<td>' + escapeHtml(o.pop_end || '') + '</td>' +
+                    '<td><span class="' + statusCls + '">' + escapeHtml(o.status || '') + '</span></td>' +
+                '</tr>';
+            }).join('');
+            body = '<table><thead><tr>' +
+                    '<th>PIID</th><th>Contractor</th><th>Ceiling</th><th>Obligated</th><th>PoP End</th><th>Status</th>' +
+                '</tr></thead><tbody>' + rows + '</tbody></table>';
+        }
+
+        const meta = 'Showing top ' + orders.length + ' live order' + (orders.length === 1 ? '' : 's') +
+                     ' by ceiling &middot; ' + totalOrders.toLocaleString() + ' total order' +
+                     (totalOrders === 1 ? '' : 's') + ' on this vehicle, ' +
+                     activeOrders.toLocaleString() + ' currently in force.';
+
+        const content = '<div class="orders-popover">' +
+            '<h3>Orders on ' + escapeHtml(v.parent_piid || '') + '</h3>' +
+            '<div class="orders-meta">' + meta + '</div>' +
+            body +
+        '</div>';
+        createModal({ content });
     }
 
     $(document).ready(init);

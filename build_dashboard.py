@@ -450,6 +450,7 @@ def build_vehicles_json(contracts: dict) -> list:
         "latest_effective_end": None,
         "vehicle_ceiling": None,     # IDV master's own potential_total_value
         "vehicle_obligated": None,   # IDV master's own obligated
+        "all_orders": [],            # for top-N selection after rollup
     })
 
     for c in contracts.values():
@@ -465,6 +466,18 @@ def build_vehicles_json(contracts: dict) -> list:
             v["active_orders"] += 1
         v["total_obligated"] += c.get("obligated") or 0
         v["total_ceiling"] += c.get("ceiling") or 0
+
+        # Collect order slim record for drill-down (filtered + sorted after loop).
+        v["all_orders"].append({
+            "piid":       c.get("piid"),
+            "contractor": c.get("recipient_name"),
+            "ceiling":    c.get("ceiling"),
+            "obligated":  c.get("obligated"),
+            "pop_end":    (c.get("pop_end") or "")[:10] or None,
+            "pop_potential_end": (c.get("pop_potential_end") or "")[:10] or None,
+            "status":     c.get("status"),
+            "link":       c.get("usaspending_link"),
+        })
 
         if c.get("recipient_name"):
             v["contractors"].add(c["recipient_name"])
@@ -545,6 +558,24 @@ def build_vehicles_json(contracts: dict) -> list:
         remaining = v["total_ceiling"] - v["total_obligated"]
         pct_used = round(v["total_obligated"] / v["total_ceiling"] * 100, 1) if v["total_ceiling"] > 0 else None
 
+        # Top 10 orders for drill-down: live (Active/Expiring Soon) only,
+        # sorted by ceiling desc.
+        live_orders = [o for o in v["all_orders"] if o.get("status") in ("Active", "Expiring Soon")]
+        live_orders.sort(key=lambda o: -(o.get("ceiling") or 0))
+        top_orders = [
+            {
+                "piid":       o["piid"],
+                "contractor": o["contractor"],
+                "ceiling":    round(o["ceiling"]) if o.get("ceiling") else None,
+                "obligated":  round(o["obligated"]) if o.get("obligated") else None,
+                "pop_end":    o["pop_end"],
+                "pop_potential_end": o["pop_potential_end"],
+                "status":     o["status"],
+                "link":       o["link"],
+            }
+            for o in live_orders[:10]
+        ]
+
         records.append({
             "parent_piid":        parent_piid,
             "vehicle_type":       v["vehicle_type"],
@@ -570,6 +601,7 @@ def build_vehicles_json(contracts: dict) -> list:
             "vehicle_obligated":  round(v["vehicle_obligated"]) if v.get("vehicle_obligated") else None,
             "ceiling_remaining":  round(remaining),
             "pct_ceiling_used":   pct_used,
+            "top_orders":         top_orders,
             "states":             sorted(v["states"])[:10],
         })
 
@@ -679,11 +711,10 @@ def main():
     print(f"  After drop policy: {len(contracts):,} kept "
           f"(dropped {dropped['Expired']:,} Expired, {dropped['Unknown']:,} Unknown)")
 
-    # Build JSONs
+    # Build JSONs. Contracts (task orders / standalones) are not emitted as
+    # their own file -- they're folded into each vehicle's top_orders for
+    # the drill-down. Summary stats still come from the full contracts dict.
     print("\nBuilding dashboard JSONs...")
-
-    contracts_json = build_contracts_json(contracts)
-    print(f"  contracts.json: {len(contracts_json):,} records")
 
     vehicles_json = build_vehicles_json(contracts)
     print(f"  vehicles.json: {len(vehicles_json):,} records")
@@ -697,7 +728,6 @@ def main():
 
     # Write outputs
     outputs = {
-        "contracts.json": contracts_json,
         "vehicles.json":  vehicles_json,
         "summary.json":   summary,
         "filters.json":   filters,

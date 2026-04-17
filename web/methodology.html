@@ -91,8 +91,7 @@
             <h1>DoD Contract Vehicles</h1>
             <p class="site-subtitle">Methodology — how the dashboard is built</p>
             <nav class="page-nav">
-                <a href="index.html">Contracts</a>
-                <a href="vehicles.html">Vehicles</a>
+                <a href="index.html">Dashboard</a>
                 <a href="methodology.html" class="active">Methodology</a>
             </nav>
         </header>
@@ -102,26 +101,15 @@
                <code>config.yaml</code> that drove the last build.</p>
 
             <h2>What this dashboard shows</h2>
-            <p>Active DoD contract vehicles and the orders placed against them, with scope, ceiling,
-               obligations, and remaining capacity. Built to help program offices find existing
-               vehicles to place orders on instead of starting a new procurement.</p>
-
-            <h3>Contracts vs Vehicles — the two views</h3>
-            <p>USASpending records two very different kinds of award. We split them into two pages
-               so counts and ceilings aren't double-counted:</p>
-            <ul>
-                <li><strong>Vehicles</strong> (the <em>parent</em> awards) — IDIQs, BPAs, GWACs, FSS
-                    schedules. These are the ordering vehicles themselves. Each row is one parent
-                    IDV with its own ceiling and ordering-period end date, plus rolled-up stats
-                    across every order that's been placed under it.</li>
-                <li><strong>Contracts</strong> (the <em>individual awards</em>) — task orders, BPA
-                    calls, and one-off standalone contracts. These are what actually gets bought.
-                    Each row is a single award; no roll-up.</li>
-            </ul>
-            <p>A vehicle exists to let you place orders; a contract is one of those orders (or a
-               standalone buy that isn't under a vehicle). IDV master records appear <em>only</em>
-               on Vehicles — including them on Contracts would double-count their ceilings against
-               the orders under them.</p>
+            <p>Active DoD contract vehicles — IDIQs, BPAs, GWACs, and FSS schedules — with scope,
+               ceiling, obligations, and remaining capacity. Built to help program offices find
+               existing vehicles to place orders on instead of starting a new procurement.</p>
+            <p>Each row on the dashboard is one parent IDV. Click its PIID to drill down to
+               the top orders that have been placed under it.</p>
+            <p>Standalone one-off contracts (buys that aren't under a vehicle) and individual
+               task orders aren't shown as their own rows — they're rolled up into the vehicle's
+               summary stats. Including them separately would double-count the same ceiling
+               money against both the vehicle and its orders.</p>
 
             <h2>Data sources</h2>
             <ul>
