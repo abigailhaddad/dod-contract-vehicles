@@ -49,6 +49,9 @@
     </style>
 </head>
 <body>
+    <div class="experimental-banner">
+        This is experimental — please do not rely on this.
+    </div>
     <div class="site-container">
         <header class="site-header">
             <h1>DoD Contract Vehicles</h1>
@@ -396,7 +399,8 @@
     }
 
     function updateStats(rows) {
-        const active = rows.filter(r => r.status === 'Active').length;
+        // "Active" includes Expiring Soon (both are in-force).
+        const active = rows.filter(r => r.status === 'Active' || r.status === 'Expiring Soon').length;
         let orders = 0, ceiling = 0, remaining = 0;
         const contractorSet = new Set();
         for (const r of rows) {

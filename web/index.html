@@ -49,6 +49,9 @@
     </style>
 </head>
 <body>
+    <div class="experimental-banner">
+        This is experimental — please do not rely on this.
+    </div>
     <div class="site-container">
         <!-- Header -->
         <header class="site-header">
@@ -393,8 +396,10 @@
     }
 
     function updateStats(rows) {
-        const active = rows.filter(r => r.status === 'Active').length;
+        // "Active" includes Expiring Soon (both are in-force); the Expiring
+        // card shows the narrow subset.
         const expiring = rows.filter(r => r.status === 'Expiring Soon').length;
+        const active = rows.filter(r => r.status === 'Active' || r.status === 'Expiring Soon').length;
         let ceiling = 0, obligated = 0, remaining = 0;
         const contractorSet = new Set();
         for (const r of rows) {
