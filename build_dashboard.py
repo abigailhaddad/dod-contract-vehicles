@@ -270,6 +270,7 @@ def stream_and_aggregate() -> dict:
                 "recipient_parent":   _val(row, "recipient_parent_name"),
                 "parent_award_type_code": _val(row, "parent_award_type_code"),
                 "parent_award_type":  _val(row, "parent_award_type"),
+                "award_type_code":    _val(row, "award_type_code"),
                 "naics_code":         _val(row, "naics_code"),
                 "naics_description":  _val(row, "naics_description"),
                 "psc_code":           _val(row, "product_or_service_code"),
@@ -339,6 +340,14 @@ def enrich_contracts(contracts: dict) -> dict:
         # Status (from effective_end computed during streaming)
         c["status"] = _classify_status(c.get("effective_end"))
 
+        # IDV master = the vehicle itself (IDIQ/BPA/GWAC record), not an order
+        # against one. Identified by award_type_code starting with IDV, or the
+        # CONT_IDV_ key prefix as fallback. IDV masters belong on the Vehicles
+        # view only -- including them in Contracts sums double-counts ceiling
+        # against their task orders.
+        awt = c.get("award_type_code") or ""
+        c["is_idv_master"] = awt.startswith("IDV") or (c.get("key") or "").startswith("CONT_IDV_")
+
         # Vehicle type
         c["vehicle_type"] = PARENT_AWARD_TYPE_LABELS.get(
             c.get("parent_award_type_code") or "", "Standalone"
@@ -366,9 +375,12 @@ def enrich_contracts(contracts: dict) -> dict:
 
 
 def build_contracts_json(contracts: dict) -> list:
-    """Build JSON for all (post-filter) contracts."""
+    """Build JSON for all contract awards except IDV masters (those appear
+    in the Vehicles view instead)."""
     records = []
     for c in contracts.values():
+        if c.get("is_idv_master"):
+            continue
         status = c["status"]
         records.append({
             "key":                c["key"],
@@ -412,7 +424,20 @@ def build_contracts_json(contracts: dict) -> list:
 
 
 def build_vehicles_json(contracts: dict) -> list:
-    """Group contracts by parent PIID for vehicle-level rollup."""
+    """Group contracts by parent PIID for vehicle-level rollup.
+
+    Two inputs feed a vehicle:
+      - Task orders under the IDV (grouped by their parent_piid).
+      - The IDV master record itself (keyed by its own piid), when present.
+        Supplies the vehicle's own ceiling and effective_end, which are more
+        authoritative than task-order-level aggregations.
+    """
+    # Index IDV masters by their piid for O(1) lookup during rollup.
+    idv_masters = {
+        c["piid"]: c for c in contracts.values()
+        if c.get("is_idv_master") and c.get("piid")
+    }
+
     vehicles = defaultdict(lambda: {
         "order_count": 0, "active_orders": 0,
         "total_obligated": 0.0, "total_ceiling": 0.0,
@@ -423,9 +448,13 @@ def build_vehicles_json(contracts: dict) -> list:
         "vehicle_type": None, "parent_award_type": None,
         "earliest_start": None, "latest_end": None, "latest_potential_end": None,
         "latest_effective_end": None,
+        "vehicle_ceiling": None,     # IDV master's own potential_total_value
+        "vehicle_obligated": None,   # IDV master's own obligated
     })
 
     for c in contracts.values():
+        if c.get("is_idv_master"):
+            continue
         parent = c.get("parent_piid")
         if not parent:
             continue
@@ -468,6 +497,41 @@ def build_vehicles_json(contracts: dict) -> list:
         if ee and (not v["latest_effective_end"] or ee > v["latest_effective_end"]):
             v["latest_effective_end"] = ee
 
+    # Fold in IDV master info: add its ceiling/obligated as the vehicle's
+    # own, and use its effective_end to refine latest_effective_end.
+    for parent_piid, v in vehicles.items():
+        master = idv_masters.get(parent_piid)
+        if not master:
+            continue
+        if master.get("ceiling"):
+            v["vehicle_ceiling"] = master["ceiling"]
+        if master.get("obligated"):
+            v["vehicle_obligated"] = master["obligated"]
+        master_ee = (master.get("effective_end") or "")[:10]
+        if master_ee and master_ee > (v["latest_effective_end"] or ""):
+            v["latest_effective_end"] = master_ee
+
+    # Include IDV masters that have no task orders yet (so empty-but-live
+    # vehicles are still findable).
+    for piid, master in idv_masters.items():
+        if piid in vehicles:
+            continue
+        v = vehicles[piid]  # creates fresh entry via defaultdict
+        v["vehicle_ceiling"] = master.get("ceiling")
+        v["vehicle_obligated"] = master.get("obligated")
+        v["latest_effective_end"] = (master.get("effective_end") or "")[:10] or None
+        v["latest_end"] = (master.get("pop_end") or "")[:10] or None
+        v["latest_potential_end"] = (master.get("pop_potential_end") or "")[:10] or None
+        v["earliest_start"] = (master.get("pop_start") or "")[:10] or None
+        if master.get("recipient_name"):
+            v["contractors"].add(master["recipient_name"])
+        for field in ("department", "sub_agency", "awarding_office"):
+            v[field] = master.get(field)
+        # IDV master's award_type_code (e.g. "IDV_B") maps to vehicle_type
+        v["vehicle_type"] = PARENT_AWARD_TYPE_LABELS.get(
+            master.get("award_type_code") or "", v["vehicle_type"]
+        )
+
     # Build JSON records. Vehicle status from its latest effective end across
     # all contributing orders; apply configured drop policy.
     records = []
@@ -502,6 +566,8 @@ def build_vehicles_json(contracts: dict) -> list:
             "latest_effective_end": v["latest_effective_end"],
             "total_ceiling":      round(v["total_ceiling"]) if v["total_ceiling"] else None,
             "total_obligated":    round(v["total_obligated"]) if v["total_obligated"] else None,
+            "vehicle_ceiling":    round(v["vehicle_ceiling"]) if v.get("vehicle_ceiling") else None,
+            "vehicle_obligated":  round(v["vehicle_obligated"]) if v.get("vehicle_obligated") else None,
             "ceiling_remaining":  round(remaining),
             "pct_ceiling_used":   pct_used,
             "states":             sorted(v["states"])[:10],
@@ -512,26 +578,23 @@ def build_vehicles_json(contracts: dict) -> list:
 
 
 def build_summary(contracts: dict, vehicles_json: list) -> dict:
-    # "Active" headline stats treat Expiring Soon as a subset of in-force
-    # (matches the page's glossary). expiring_soon remains the narrow count.
+    # Summary excludes IDV masters -- they live on the Vehicles view and
+    # would double-count ceiling against their task orders here.
     IN_FORCE = ("Active", "Expiring Soon")
-    active_count = sum(1 for c in contracts.values() if c["status"] in IN_FORCE)
-    expiring_count = sum(1 for c in contracts.values() if c["status"] == "Expiring Soon")
-    active_ceiling = sum(c.get("ceiling") or 0 for c in contracts.values() if c["status"] in IN_FORCE)
-    active_obligated = sum(c.get("obligated") or 0 for c in contracts.values() if c["status"] in IN_FORCE)
+    non_idv = [c for c in contracts.values() if not c.get("is_idv_master")]
+    in_force = [c for c in non_idv if c["status"] in IN_FORCE]
+
+    active_count = len(in_force)
+    expiring_count = sum(1 for c in non_idv if c["status"] == "Expiring Soon")
+    active_ceiling = sum(c.get("ceiling") or 0 for c in in_force)
+    active_obligated = sum(c.get("obligated") or 0 for c in in_force)
     active_remaining = active_ceiling - active_obligated
-    active_contractors = len(set(
-        c.get("recipient_name") for c in contracts.values()
-        if c["status"] in IN_FORCE and c.get("recipient_name")
-    ))
-    active_offices = len(set(
-        c.get("awarding_office") for c in contracts.values()
-        if c["status"] in IN_FORCE and c.get("awarding_office")
-    ))
+    active_contractors = len({c["recipient_name"] for c in in_force if c.get("recipient_name")})
+    active_offices = len({c["awarding_office"] for c in in_force if c.get("awarding_office")})
     active_vehicles = sum(1 for v in vehicles_json if v["status"] in IN_FORCE)
 
     return {
-        "total_contracts":      len(contracts),
+        "total_contracts":      len(non_idv),
         "active_contracts":     active_count,
         "expiring_soon":        expiring_count,
         "total_ceiling_b":      round(active_ceiling / 1e9, 1),
