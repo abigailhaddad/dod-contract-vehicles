@@ -162,29 +162,33 @@ def stream_and_aggregate() -> dict:
     Data sources (in priority order):
       1. Local merged CSV (data/dod_contracts_bulk.csv)
       2. Local checkpoint files (data/bulk_checkpoints/FY*.csv)
-      3. R2 checkpoint files (downloaded once to scratch disk, then streamed)
+      3. R2 checkpoint files, downloaded one at a time to scratch disk
+         and deleted after processing (to fit within the runner's ~14GB
+         root-partition limit; five FY files collectively exceed it).
+
+    Single pass: each source is streamed once; descriptions and all
+    other fields are captured inline. No more two-pass scheme -- the
+    drop-expired filter keeps memory manageable on its own.
     """
-    # Determine data sources
-    sources = []  # list of (name, iterator_factory)
+    # Determine data sources as (name, callable -> Path or iterator).
+    # For R2 we yield (name, callable that downloads + returns local Path);
+    # the loop deletes the file after processing.
+    local_sources = []  # (name, Path)
+    r2_pairs = []       # (name, R2 key)
 
     if BULK_CSV.exists():
-        sources.append((BULK_CSV.name, lambda p=BULK_CSV: _stream_local_csv(p)))
+        local_sources.append((BULK_CSV.name, BULK_CSV))
     else:
         local_cps = sorted(CHECKPOINT_DIR.glob("FY*.csv"))
         local_cps = [cp for cp in local_cps if cp.stat().st_size > 0]
         if local_cps:
             for cp in local_cps:
-                sources.append((cp.name, lambda p=cp: _stream_local_csv(p)))
+                local_sources.append((cp.name, cp))
 
-    if not sources:
-        # Download R2 checkpoints to scratch disk. Using download_file (not
-        # long-lived get_object streams) -- Transfer Manager handles retry
-        # and avoids the mid-read connection drops we were hitting.
+    s3 = bucket = None
+    if not local_sources:
         s3, bucket = _r2_client()
         if s3:
-            import tempfile
-            scratch = Path(tempfile.mkdtemp(prefix="r2_cache_"))
-            print(f"No local data -- downloading from R2 to {scratch}...")
             prefix = "dod_vehicles/"
             paginator = s3.get_paginator("list_objects_v2")
             for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
@@ -192,32 +196,28 @@ def stream_and_aggregate() -> dict:
                     key = obj["Key"]
                     name = Path(key).name
                     if name.startswith("FY") and name.endswith(".csv"):
-                        local = scratch / name
-                        print(f"  Downloading {name}...", end=" ", flush=True)
-                        s3.download_file(bucket, key, str(local))
-                        print(f"{local.stat().st_size // (1024*1024):,} MB", flush=True)
-                        sources.append((name, lambda p=local: _stream_local_csv(p)))
+                        r2_pairs.append((name, key))
 
-    if not sources:
+    total_count = len(local_sources) + len(r2_pairs)
+    if total_count == 0:
         raise FileNotFoundError("No data found -- run fetch_awards.py first.")
 
-    print(f"Reading from {len(sources)} source(s)...")
+    print(f"Reading from {total_count} source(s)...")
 
     # contracts[key] = {field: value, ...} — latest transaction wins
     contracts = {}
     # Track sum of federal_action_obligation per contract (it's per-transaction)
     fao_sums = defaultdict(float)
 
-    # Early filter driven by config: drop Expired (if configured) rows here
-    # to keep memory down. Unknown is handled after both passes complete, since
-    # any transaction of a given contract may fill in the end date.
     skipped_expired = 0
-
     total_rows = 0
-    for src_name, src_iter in sources:
+    scratch_dir = None
+
+    def _process_source(src_name: str, path: Path):
+        nonlocal total_rows, skipped_expired
         print(f"  Streaming {src_name}...", end=" ", flush=True)
         file_rows = 0
-        for row in src_iter():
+        for row in _stream_local_csv(path):
             total_rows += 1
             file_rows += 1
             if total_rows % 2_000_000 == 0:
@@ -227,9 +227,6 @@ def stream_and_aggregate() -> dict:
             if not key:
                 continue
 
-            # Early filter: drop rows whose effective end is known and expired.
-            # Rows with no end date are kept in pass 1 (a later transaction
-            # may populate one).
             eff_end = _effective_end(row)
             if DROP_EXPIRED and eff_end and eff_end < TODAY_STR:
                 skipped_expired += 1
@@ -237,18 +234,14 @@ def stream_and_aggregate() -> dict:
 
             action_date = _val(row, "action_date") or ""
 
-            # Sum federal_action_obligation across all mods
             fao = _float(row, "federal_action_obligation")
             if fao:
                 fao_sums[key] += fao
 
-            # Keep latest transaction (by action_date string comparison)
             existing = contracts.get(key)
             if existing and existing.get("_action_date", "") > action_date:
-                continue  # existing is newer, skip this row
+                continue
 
-            # Store only the fields we need. Description fields are filled
-            # by a second pass (they're bulky and not needed for filter/status).
             contracts[key] = {
                 "_action_date":       action_date,
                 "key":                key,
@@ -271,6 +264,9 @@ def stream_and_aggregate() -> dict:
                 "parent_award_type_code": _val(row, "parent_award_type_code"),
                 "parent_award_type":  _val(row, "parent_award_type"),
                 "award_type_code":    _val(row, "award_type_code"),
+                "award_description":  _val(row, "award_description"),
+                "base_description":   _val(row, "prime_award_base_transaction_description"),
+                "txn_description":    _val(row, "transaction_description"),
                 "naics_code":         _val(row, "naics_code"),
                 "naics_description":  _val(row, "naics_description"),
                 "psc_code":           _val(row, "product_or_service_code"),
@@ -284,38 +280,40 @@ def stream_and_aggregate() -> dict:
                 "business_size_label": _val(row, "contracting_officers_determination_of_business_size"),
                 "usaspending_link":   _val(row, "usaspending_permalink"),
             }
-
         print(f"{file_rows:,} rows")
+
+    # Process local sources first, then R2 (one file at a time: download,
+    # process, delete). Keeps disk usage capped at ~one file at a time.
+    for name, path in local_sources:
+        _process_source(name, path)
+
+    if r2_pairs:
+        import tempfile
+        scratch_dir = Path(tempfile.mkdtemp(prefix="r2_cache_"))
+        print(f"Downloading R2 sources one-at-a-time to {scratch_dir}...")
+        for name, r2_key in r2_pairs:
+            local = scratch_dir / name
+            print(f"  Downloading {name}...", end=" ", flush=True)
+            s3.download_file(bucket, r2_key, str(local))
+            print(f"{local.stat().st_size // (1024*1024):,} MB", flush=True)
+            try:
+                _process_source(name, local)
+            finally:
+                try:
+                    local.unlink()
+                except OSError:
+                    pass
+        try:
+            scratch_dir.rmdir()
+        except OSError:
+            pass
 
     print(f"  Total: {total_rows:,} transactions, {skipped_expired:,} skipped (expired), {len(contracts):,} unique contracts")
 
-    # Apply fao fallback for contracts missing total_dollars_obligated
+    # fao fallback for contracts missing total_dollars_obligated
     for key, c in contracts.items():
         if not c["obligated"] or c["obligated"] == 0:
             c["obligated"] = fao_sums.get(key)
-
-    # Second pass: fetch descriptions only for surviving contracts.
-    # Picks the description fields from each contract's latest transaction,
-    # matching pass-1 semantics.
-    print("\nFetching descriptions (second pass, surviving contracts only)...")
-    desc_latest = {}  # key -> latest action_date for which we stored a description
-    for src_name, src_iter in sources:
-        print(f"  Streaming {src_name}...", end=" ", flush=True)
-        row_count = 0
-        for row in src_iter():
-            row_count += 1
-            key = _val(row, "contract_award_unique_key")
-            if not key or key not in contracts:
-                continue
-            action_date = _val(row, "action_date") or ""
-            if desc_latest.get(key, "") > action_date:
-                continue
-            desc_latest[key] = action_date
-            c = contracts[key]
-            c["award_description"] = _val(row, "award_description")
-            c["base_description"]  = _val(row, "prime_award_base_transaction_description")
-            c["txn_description"]   = _val(row, "transaction_description")
-        print(f"{row_count:,} rows")
 
     return contracts
 
