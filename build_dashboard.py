@@ -737,7 +737,7 @@ def main():
         path.write_text(json.dumps(data, indent=2, default=str))
         print(f"  Wrote {path}")
 
-    print(f"\nDone. {len(contracts_json):,} contracts + {len(vehicles_json):,} vehicles.")
+    print(f"\nDone. {len(vehicles_json):,} vehicles (summary counts in summary.json).")
     print("Commit web/data/ to deploy.")
 
 
