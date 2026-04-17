@@ -99,17 +99,9 @@
         <!-- Charts -->
         <section class="charts-section">
             <div class="charts-grid">
-                <div class="chart-card">
-                    <h3>Status distribution</h3>
-                    <canvas id="chartStatus"></canvas>
-                </div>
                 <div class="chart-card chart-tall">
                     <h3>Top sub-agencies (by contract count)</h3>
                     <canvas id="chartAgency"></canvas>
-                </div>
-                <div class="chart-card chart-tall">
-                    <h3>Top vehicle types</h3>
-                    <canvas id="chartVehicle"></canvas>
                 </div>
                 <div class="chart-card">
                     <h3>Expiring by month (next 24 mo)</h3>
@@ -216,13 +208,6 @@
         padding: 10,
     };
 
-    const STATUS_COLORS = {
-        'Active':        '#2D6A4F',
-        'Expiring Soon': '#D4A03C',
-        'Expired':       '#C0392B',
-        'Unknown':       '#7A6E62',
-    };
-
     // ============================================
     // Formatters
     // ============================================
@@ -247,51 +232,10 @@
     // ============================================
     // Charts
     // ============================================
-    let chartStatus = null, chartAgency = null, chartVehicle = null, chartExpiring = null;
+    let chartAgency = null, chartExpiring = null;
 
     function createCharts() {
-        chartStatus = new Chart(document.getElementById('chartStatus'), {
-            type: 'bar',
-            data: { labels: [], datasets: [{ label: 'Contracts', data: [], backgroundColor: [], borderWidth: 0 }] },
-            options: {
-                responsive: true, maintainAspectRatio: false,
-                plugins: { legend: { display: false }, tooltip: CHART_TOOLTIP },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        grid: { color: CHART_COLORS.grid },
-                        ticks: {
-                            color: CHART_COLORS.tickLabel, precision: 0,
-                            callback: v => v >= 1000 ? (v / 1000).toFixed(0) + 'K' : v,
-                        },
-                    },
-                    x: { grid: { display: false }, ticks: { color: CHART_COLORS.tickLabel } },
-                },
-            },
-        });
-
         chartAgency = new Chart(document.getElementById('chartAgency'), {
-            type: 'bar',
-            data: { labels: [], datasets: [{ label: 'Contracts', data: [], backgroundColor: CHART_COLORS.primary, borderWidth: 0 }] },
-            options: {
-                indexAxis: 'y',
-                responsive: true, maintainAspectRatio: false,
-                plugins: { legend: { display: false }, tooltip: CHART_TOOLTIP },
-                scales: {
-                    x: {
-                        beginAtZero: true,
-                        grid: { color: CHART_COLORS.grid },
-                        ticks: {
-                            color: CHART_COLORS.tickLabel,
-                            callback: v => v >= 1000 ? (v / 1000).toFixed(0) + 'K' : v,
-                        },
-                    },
-                    y: { grid: { display: false }, ticks: { color: CHART_COLORS.tickLabel, font: { size: 11 } } },
-                },
-            },
-        });
-
-        chartVehicle = new Chart(document.getElementById('chartVehicle'), {
             type: 'bar',
             data: { labels: [], datasets: [{ label: 'Contracts', data: [], backgroundColor: CHART_COLORS.primary, borderWidth: 0 }] },
             options: {
@@ -337,19 +281,6 @@
     }
 
     function updateCharts(rows) {
-        // Status distribution
-        const statusCounts = {};
-        for (const r of rows) {
-            const s = r.status || 'Unknown';
-            statusCounts[s] = (statusCounts[s] || 0) + 1;
-        }
-        const statusOrder = ['Active', 'Expiring Soon', 'Expired', 'Unknown'];
-        const statusLabels = statusOrder.filter(s => statusCounts[s] != null);
-        chartStatus.data.labels = statusLabels;
-        chartStatus.data.datasets[0].data = statusLabels.map(s => statusCounts[s] || 0);
-        chartStatus.data.datasets[0].backgroundColor = statusLabels.map(s => STATUS_COLORS[s] || CHART_COLORS.primary);
-        chartStatus.update();
-
         // Top sub-agencies
         const agencyCounts = {};
         for (const r of rows) {
@@ -360,17 +291,6 @@
         chartAgency.data.labels = topAgencies.map(x => x[0]);
         chartAgency.data.datasets[0].data = topAgencies.map(x => x[1]);
         chartAgency.update();
-
-        // Top vehicle types
-        const vehicleCounts = {};
-        for (const r of rows) {
-            const v = r.vehicle_type || '(none)';
-            vehicleCounts[v] = (vehicleCounts[v] || 0) + 1;
-        }
-        const topVehicles = Object.entries(vehicleCounts).sort((a, b) => b[1] - a[1]).slice(0, 10);
-        chartVehicle.data.labels = topVehicles.map(x => x[0]);
-        chartVehicle.data.datasets[0].data = topVehicles.map(x => x[1]);
-        chartVehicle.update();
 
         // Expiring by month (next 24 months from today)
         const today = new Date();
