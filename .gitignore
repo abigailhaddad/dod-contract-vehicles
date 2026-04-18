@@ -5,3 +5,8 @@ __pycache__/
 *.pyc
 .DS_Store
 .playwright-mcp/
+.venv/
+.pytest_cache/
+test-results/
+.wrangler/
+node_modules/

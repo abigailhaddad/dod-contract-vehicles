@@ -109,5 +109,71 @@ jobs:
       - name: Build dashboard (streams from R2, no local data needed)
         run: python build_dashboard.py
 
-      - name: Upload dashboard JSONs to R2
-        run: python r2_sync.py upload --dir web/data --prefix dashboard_data/ --suffix .json --mirror
+      - name: Upload dashboard JSONs to R2 staging
+        run: python r2_sync.py upload --dir web/data --prefix dashboard_data_staging/ --suffix .json --mirror
+
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [build]
+
+    env:
+      CF_R2_ACCOUNT_ID: ${{ secrets.CF_R2_ACCOUNT_ID }}
+      CF_R2_BUCKET: ${{ secrets.CF_R2_BUCKET }}
+      CF_R2_ACCESS_KEY_ID: ${{ secrets.CF_R2_ACCESS_KEY_ID }}
+      CF_R2_SECRET_ACCESS_KEY: ${{ secrets.CF_R2_SECRET_ACCESS_KEY }}
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install deps
+        run: |
+          pip install boto3 pyyaml pytest pytest-playwright
+          playwright install --with-deps chromium
+
+      - name: Pull staging JSONs
+        run: python r2_sync.py download --dir web/data --prefix dashboard_data_staging/
+
+      - name: Run data tests
+        run: pytest tests/test_data.py -v
+
+      - name: Run frontend tests
+        run: pytest tests/test_frontend.py -v
+
+  promote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [test]
+
+    env:
+      CF_R2_ACCOUNT_ID: ${{ secrets.CF_R2_ACCOUNT_ID }}
+      CF_R2_BUCKET: ${{ secrets.CF_R2_BUCKET }}
+      CF_R2_ACCESS_KEY_ID: ${{ secrets.CF_R2_ACCESS_KEY_ID }}
+      CF_R2_SECRET_ACCESS_KEY: ${{ secrets.CF_R2_SECRET_ACCESS_KEY }}
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0   # need full history to fast-forward prod
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install deps
+        run: pip install boto3
+
+      - name: Promote R2 staging -> prod
+        run: python r2_sync.py promote --src dashboard_data_staging/ --dst dashboard_data/
+
+      - name: Fast-forward prod branch to main
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin main prod || git fetch origin main
+          git checkout -B prod origin/main
+          git push origin prod --force-with-lease
