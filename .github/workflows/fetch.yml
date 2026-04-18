@@ -16,7 +16,7 @@ on:
         type: boolean
         default: false
   schedule:
-    - cron: "0 8 1 * *"  # 1st of each month at 8am UTC
+    - cron: "0 8 * * 1"  # every Monday at 8am UTC (4am ET / 1am PT)
 
 permissions:
   actions: write
