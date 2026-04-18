@@ -110,4 +110,4 @@ jobs:
         run: python build_dashboard.py
 
       - name: Upload dashboard JSONs to R2
-        run: python r2_sync.py upload --dir web/data --prefix dashboard_data/ --suffix .json
+        run: python r2_sync.py upload --dir web/data --prefix dashboard_data/ --suffix .json --mirror

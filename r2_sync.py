@@ -51,16 +51,35 @@ def download_state(local_dir: Path, prefix: str = DEFAULT_PREFIX) -> int:
 
 
 def upload_state(local_dir: Path, prefix: str = DEFAULT_PREFIX,
-                 suffixes: tuple = DEFAULT_SUFFIXES) -> int:
-    """Upload files matching `suffixes` from local_dir to R2 under `prefix`."""
+                 suffixes: tuple = DEFAULT_SUFFIXES, mirror: bool = False) -> int:
+    """Upload files matching `suffixes` from local_dir to R2 under `prefix`.
+
+    If mirror=True, also delete any object under `prefix` that wasn't part
+    of this upload -- keeps R2 in sync with local_dir, no orphan files.
+    """
     s3 = _client()
+    uploaded_keys = set()
     count = 0
     for f in sorted(local_dir.iterdir()):
         if f.suffix in suffixes:
             key = prefix + f.name
             s3.upload_file(str(f), BUCKET, key)
+            uploaded_keys.add(key)
             count += 1
     print(f"Uploaded {count} files to R2")
+
+    if mirror:
+        paginator = s3.get_paginator("list_objects_v2")
+        deleted = 0
+        for page in paginator.paginate(Bucket=BUCKET, Prefix=prefix):
+            for obj in page.get("Contents", []):
+                if obj["Key"] not in uploaded_keys:
+                    s3.delete_object(Bucket=BUCKET, Key=obj["Key"])
+                    deleted += 1
+                    print(f"  Deleted orphan: {obj['Key']}")
+        if deleted:
+            print(f"Deleted {deleted} orphan files")
+
     return count
 
 
@@ -73,10 +92,13 @@ if __name__ == "__main__":
     parser.add_argument("--suffix", action="append",
                         help="File extension to include (upload only). "
                              "Repeat for multiple. Default: .csv, .not_found")
+    parser.add_argument("--mirror", action="store_true",
+                        help="Upload only: delete any R2 objects under --prefix "
+                             "that weren't part of this upload (keeps R2 in sync).")
     args = parser.parse_args()
     d = Path(args.dir)
     if args.action == "download":
         download_state(d, prefix=args.prefix)
     else:
         suffixes = tuple(args.suffix) if args.suffix else DEFAULT_SUFFIXES
-        upload_state(d, prefix=args.prefix, suffixes=suffixes)
+        upload_state(d, prefix=args.prefix, suffixes=suffixes, mirror=args.mirror)

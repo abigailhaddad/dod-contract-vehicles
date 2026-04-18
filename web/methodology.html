@@ -211,9 +211,14 @@
     </div>
 
     <script>
+        const DATA_BASE = window.DATA_BASE
+            || (location.hostname === 'localhost' || location.hostname === '127.0.0.1'
+                ? 'data'
+                : 'https://pub-REPLACE-ME.r2.dev/dashboard_data');
+
         (async function() {
             try {
-                const resp = await fetch('data/config.json');
+                const resp = await fetch(DATA_BASE + '/config.json');
                 const cfg = await resp.json();
 
                 const set = (id, val) => {
