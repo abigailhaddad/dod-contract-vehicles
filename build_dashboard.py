@@ -25,6 +25,8 @@ from pathlib import Path
 
 import yaml
 
+from build_families import build_families
+
 csv.field_size_limit(min(sys.maxsize, 2**31 - 1))
 
 BULK_CSV       = Path("data/dod_contracts_bulk.csv")
@@ -279,6 +281,12 @@ def stream_and_aggregate() -> dict:
                 "place_state":        _val(row, "primary_place_of_performance_state_code"),
                 "business_size_label": _val(row, "contracting_officers_determination_of_business_size"),
                 "usaspending_link":   _val(row, "usaspending_permalink"),
+                # Multi-award IDV flag -- code (A=single, B=multiple) + description.
+                # USASpending schemas have named this column both ways over time.
+                "multi_award_code":   _val(row, "multiple_or_single_award_i_d_v")
+                                       or _val(row, "multiple_or_single_award_idv"),
+                "multi_award_desc":   _val(row, "multiple_or_single_award_i_d_v_description")
+                                       or _val(row, "multiple_or_single_award_idv_description"),
             }
         print(f"{file_rows:,} rows")
 
@@ -442,12 +450,15 @@ def build_vehicles_json(contracts: dict) -> list:
         "contractors": set(), "naics_codes": set(),
         "naics_descriptions": set(), "descriptions": set(),
         "states": set(),
+        "solicitation_counter": defaultdict(int),  # for picking a primary
+        "master_solicitation": None,               # IDV master's own value (wins over TO counts)
         "department": None, "sub_agency": None, "awarding_office": None,
         "vehicle_type": None, "parent_award_type": None,
         "earliest_start": None, "latest_end": None, "latest_potential_end": None,
         "latest_effective_end": None,
         "vehicle_ceiling": None,     # IDV master's own potential_total_value
         "vehicle_obligated": None,   # IDV master's own obligated
+        "multi_award_flag": None,    # True if IDV master flagged multi-award (code B)
         "all_orders": [],            # for top-N selection after rollup
     })
 
@@ -479,6 +490,8 @@ def build_vehicles_json(contracts: dict) -> list:
 
         if c.get("recipient_name"):
             v["contractors"].add(c["recipient_name"])
+        if c.get("solicitation_id"):
+            v["solicitation_counter"][c["solicitation_id"]] += 1
         if c.get("naics_code"):
             v["naics_codes"].add(c["naics_code"])
         if c.get("naics_description"):
@@ -509,10 +522,14 @@ def build_vehicles_json(contracts: dict) -> list:
             v["latest_effective_end"] = ee
 
     # Fold in IDV master info: add its ceiling/obligated as the vehicle's
-    # own, and use its effective_end to refine latest_effective_end.
+    # own, use its effective_end to refine latest_effective_end, and fill
+    # in vehicle_type when task orders left it blank/Standalone.
     for parent_piid, v in vehicles.items():
         master = idv_masters.get(parent_piid)
         if not master:
+            # No master record, but task orders may carry the multi-award flag
+            # (it's set on the parent_award fields of each transaction). Use
+            # a majority vote when present.
             continue
         if master.get("ceiling"):
             v["vehicle_ceiling"] = master["ceiling"]
@@ -521,6 +538,12 @@ def build_vehicles_json(contracts: dict) -> list:
         master_ee = (master.get("effective_end") or "")[:10]
         if master_ee and master_ee > (v["latest_effective_end"] or ""):
             v["latest_effective_end"] = master_ee
+        if (not v["vehicle_type"] or v["vehicle_type"] == "Standalone") and master.get("award_type_code"):
+            label = PARENT_AWARD_TYPE_LABELS.get(master["award_type_code"])
+            if label:
+                v["vehicle_type"] = label
+        if master.get("solicitation_id"):
+            v["master_solicitation"] = master["solicitation_id"]
 
     # Include IDV masters that have no task orders yet (so empty-but-live
     # vehicles are still findable).
@@ -538,6 +561,14 @@ def build_vehicles_json(contracts: dict) -> list:
             v["contractors"].add(master["recipient_name"])
         for field in ("department", "sub_agency", "awarding_office"):
             v[field] = master.get(field)
+        if master.get("solicitation_id"):
+            v["master_solicitation"] = master["solicitation_id"]
+        ma_code = (master.get("multi_award_code") or "").upper()
+        ma_desc = (master.get("multi_award_desc") or "").upper()
+        if ma_code == "B" or "MULTIPLE" in ma_desc:
+            v["multi_award_flag"] = True
+        elif ma_code == "A" or "SINGLE" in ma_desc:
+            v["multi_award_flag"] = False
         # IDV master's award_type_code (e.g. "IDV_B") maps to vehicle_type
         v["vehicle_type"] = PARENT_AWARD_TYPE_LABELS.get(
             master.get("award_type_code") or "", v["vehicle_type"]
@@ -553,8 +584,15 @@ def build_vehicles_json(contracts: dict) -> list:
         if DROP_UNKNOWN and status == "Unknown":
             continue
 
-        remaining = v["total_ceiling"] - v["total_obligated"]
-        pct_used = round(v["total_obligated"] / v["total_ceiling"] * 100, 1) if v["total_ceiling"] > 0 else None
+        # Authoritative ceiling: the IDV master's potential_total_value_of_award
+        # when present (this is what SAM.gov / HigherGov show for the vehicle).
+        # Fall back to the sum of observed task-order ceilings only when the
+        # master record is absent -- that sum systematically undercounts real
+        # capacity because unexecuted ceiling never shows up as a task order.
+        order_ceiling_sum = v["total_ceiling"]
+        ceiling = v.get("vehicle_ceiling") or order_ceiling_sum
+        remaining = (ceiling or 0) - v["total_obligated"]
+        pct_used = round(v["total_obligated"] / ceiling * 100, 1) if ceiling else None
 
         # Top 10 orders for drill-down: live (Active/Expiring Soon) only,
         # sorted by ceiling desc.
@@ -574,6 +612,17 @@ def build_vehicles_json(contracts: dict) -> list:
             for o in live_orders[:10]
         ]
 
+        primary_solicitation = v.get("master_solicitation")
+        if not primary_solicitation and v["solicitation_counter"]:
+            primary_solicitation = max(v["solicitation_counter"].items(), key=lambda kv: kv[1])[0]
+
+        # Multi-award flag: explicit when present on the IDV master; otherwise
+        # infer from contractor count (a vehicle with orders to 2+ distinct
+        # contractors is multi-award in practice even if the flag is missing).
+        multi_award = v.get("multi_award_flag")
+        if multi_award is None:
+            multi_award = len(v["contractors"]) >= 2
+
         records.append({
             "parent_piid":        parent_piid,
             "vehicle_type":       v["vehicle_type"],
@@ -581,6 +630,8 @@ def build_vehicles_json(contracts: dict) -> list:
             "department":         v["department"],
             "sub_agency":         v["sub_agency"],
             "awarding_office":    v["awarding_office"],
+            "primary_solicitation": primary_solicitation,
+            "multi_award":        multi_award,
             "order_count":        v["order_count"],
             "active_orders":      v["active_orders"],
             "contractor_count":   len(v["contractors"]),
@@ -593,7 +644,8 @@ def build_vehicles_json(contracts: dict) -> list:
             "latest_end":         v["latest_end"],
             "latest_potential_end": v["latest_potential_end"],
             "latest_effective_end": v["latest_effective_end"],
-            "total_ceiling":      round(v["total_ceiling"]) if v["total_ceiling"] else None,
+            "total_ceiling":      round(ceiling) if ceiling else None,
+            "order_ceiling_sum":  round(order_ceiling_sum) if order_ceiling_sum else None,
             "total_obligated":    round(v["total_obligated"]) if v["total_obligated"] else None,
             "vehicle_ceiling":    round(v["vehicle_ceiling"]) if v.get("vehicle_ceiling") else None,
             "vehicle_obligated":  round(v["vehicle_obligated"]) if v.get("vehicle_obligated") else None,
@@ -607,21 +659,26 @@ def build_vehicles_json(contracts: dict) -> list:
     return records
 
 
-def build_summary(contracts: dict, vehicles_json: list) -> dict:
-    # Summary excludes IDV masters -- they live on the Vehicles view and
-    # would double-count ceiling against their task orders here.
+def build_summary(contracts: dict, vehicles_json: list, families_json: list) -> dict:
+    # Summary uses family-level ceiling/obligated so shared MATOC pools get
+    # counted once per pool (not once per sibling IDV). Other counts come
+    # from task-order rows, which excludes IDV masters.
     IN_FORCE = ("Active", "Expiring Soon")
     non_idv = [c for c in contracts.values() if not c.get("is_idv_master")]
     in_force = [c for c in non_idv if c["status"] in IN_FORCE]
 
     active_count = len(in_force)
     expiring_count = sum(1 for c in non_idv if c["status"] == "Expiring Soon")
-    active_ceiling = sum(c.get("ceiling") or 0 for c in in_force)
-    active_obligated = sum(c.get("obligated") or 0 for c in in_force)
-    active_remaining = active_ceiling - active_obligated
     active_contractors = len({c["recipient_name"] for c in in_force if c.get("recipient_name")})
     active_offices = len({c["awarding_office"] for c in in_force if c.get("awarding_office")})
     active_vehicles = sum(1 for v in vehicles_json if v["status"] in IN_FORCE)
+
+    # Family-level dollar aggregates: one ceiling per distinct pool.
+    in_force_fams = [f for f in families_json if f["status"] in IN_FORCE]
+    active_ceiling = sum(f.get("family_ceiling") or 0 for f in in_force_fams)
+    active_obligated = sum(f.get("total_obligated") or 0 for f in in_force_fams)
+    active_remaining = active_ceiling - active_obligated
+    active_families = len(in_force_fams)
 
     return {
         "total_contracts":      len(non_idv),
@@ -632,6 +689,7 @@ def build_summary(contracts: dict, vehicles_json: list) -> dict:
         "ceiling_remaining_b":  round(active_remaining / 1e9, 1),
         "unique_contractors":   active_contractors,
         "unique_vehicles":      active_vehicles,
+        "unique_families":      active_families,
         "unique_offices":       active_offices,
         "as_of":                TODAY_STR,
     }
@@ -717,8 +775,15 @@ def main():
     vehicles_json = build_vehicles_json(contracts)
     print(f"  vehicles.json: {len(vehicles_json):,} records")
 
-    summary = build_summary(contracts, vehicles_json)
-    print(f"  summary.json: {summary['active_contracts']:,} active, "
+    vehicles_json, families_json, grouping_audit = build_families(vehicles_json)
+    print(f"  families.json: {len(families_json):,} records")
+    for m, s in grouping_audit["methods"].items():
+        print(f"    {m}: {s['family_count']:,} families covering {s['vehicle_count']:,} vehicles "
+              f"(max {s['max_members']} members)")
+
+    summary = build_summary(contracts, vehicles_json, families_json)
+    print(f"  summary.json: {summary['active_contracts']:,} active contracts, "
+          f"{summary['unique_families']:,} active families, "
           f"${summary['ceiling_remaining_b']}B remaining")
 
     filters = build_filter_options(contracts)
@@ -726,10 +791,12 @@ def main():
 
     # Write outputs
     outputs = {
-        "vehicles.json":  vehicles_json,
-        "summary.json":   summary,
-        "filters.json":   filters,
-        "config.json":    config_mirror,
+        "vehicles.json":       vehicles_json,
+        "families.json":       families_json,
+        "grouping_audit.json": grouping_audit,
+        "summary.json":        summary,
+        "filters.json":        filters,
+        "config.json":         config_mirror,
     }
 
     for fname, data in outputs.items():

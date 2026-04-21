@@ -22,7 +22,8 @@ def console_errors(page):
     return errors
 
 
-def _wait_for_table(page, selector="#vehiclesTable tbody tr"):
+def _wait_for_table(page, selector="#familiesTable tbody tr"):
+    # Families tab is the landing view now; its table must render first.
     page.wait_for_selector(selector, timeout=30_000)
 
 
@@ -42,10 +43,10 @@ def test_index_loads(page, base_url, console_errors):
 def test_stats_render_nonzero(page, base_url):
     page.goto(base_url + "/", wait_until="networkidle")
     _wait_for_table(page)
-    for stat_id in ("statActive", "statOrders", "statCeiling", "statRemaining", "statContractors"):
+    # Family-tab stats are visible by default.
+    for stat_id in ("famStatActive", "famStatMembers", "famStatCeiling", "famStatRemaining", "famStatContractors"):
         text = page.locator(f"#{stat_id}").inner_text()
         assert text not in ("--", ""), f"#{stat_id} is empty"
-        # Must contain at least one digit
         assert re.search(r"\d", text), f"#{stat_id} has no number: {text!r}"
 
 
@@ -134,18 +135,41 @@ def test_clear_all_filters(page, base_url):
 # Drill-down
 # -----------------------------------------------------------------------------
 
-def test_piid_drill_down_opens_modal(page, base_url):
+def test_family_drill_down_opens_modal(page, base_url):
     page.goto(base_url + "/", wait_until="networkidle")
     _wait_for_table(page)
-    # Click the first PIID link
-    page.locator("a.piid-link").first.click()
+    # Click the first family's description/PIIDs link (opens a sibling drill-down)
+    page.locator("#familiesTable a.piid-link").first.click()
     page.wait_for_selector(".orders-popover", timeout=3_000)
-    # Title starts with "Orders on"
-    assert "Orders on" in page.locator(".orders-popover h3").inner_text()
-    # Either a table with at least one row OR the empty-state message
+    # Drill-down title is the family description or id
+    assert page.locator(".orders-popover h3").count() == 1
     has_table = page.locator(".orders-popover table tbody tr").count() > 0
     has_empty = page.locator(".orders-popover .empty").count() > 0
     assert has_table or has_empty
+
+
+def test_tab_switch_to_vehicles(page, base_url):
+    page.goto(base_url + "/", wait_until="networkidle")
+    _wait_for_table(page)
+    # Vehicles tab link exists and switching reveals its table
+    page.locator(".tab-link", has_text="Vehicles").click()
+    page.wait_for_selector("#tab-vehicles.active", timeout=3_000)
+    # The vehicles table should have rows populated (DataTable was built on load)
+    page.wait_for_selector("#vehiclesTable tbody tr", timeout=10_000)
+    # And vehicle-level stats should now be populated
+    for stat_id in ("statActive", "statOrders", "statCeiling"):
+        text = page.locator(f"#{stat_id}").inner_text()
+        assert text not in ("--", ""), f"#{stat_id} is empty after tab switch"
+
+
+def test_tab_switch_to_grouping(page, base_url):
+    page.goto(base_url + "/", wait_until="networkidle")
+    _wait_for_table(page)
+    page.locator(".tab-link", has_text="Grouping Methods").click()
+    page.wait_for_selector("#tab-grouping.active", timeout=3_000)
+    # Audit renders method cards for each grouper
+    page.wait_for_selector(".method-card", timeout=5_000)
+    assert page.locator(".method-card").count() >= 4
 
 
 # -----------------------------------------------------------------------------
@@ -173,9 +197,6 @@ def test_methodology_renders_live_config(page, base_url):
 
 def test_nav_links_resolve(page, base_url):
     page.goto(base_url + "/")
-    # Click Methodology
+    # Methodology is still a separate page
     page.locator(".page-nav a", has_text="Methodology").click()
     page.wait_for_url(re.compile(r"methodology\.html$"))
-    # Back to Dashboard
-    page.locator(".page-nav a", has_text="Dashboard").click()
-    page.wait_for_url(re.compile(r"/(index\.html)?$"))

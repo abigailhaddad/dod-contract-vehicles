@@ -17,11 +17,15 @@
             font-weight: 600;
             text-decoration: none;
             color: var(--color-text-muted);
+            padding-bottom: 0.25rem;
+            cursor: pointer;
         }
         .page-nav a.active {
             color: var(--color-accent);
             border-bottom: 2px solid var(--color-accent);
         }
+        .tab-pane { display: none; }
+        .tab-pane.active { display: block; }
         .dataTables_wrapper .row { margin: 0; }
         .dataTables_wrapper .row > div { padding: 0; }
         .list-cell {
@@ -53,6 +57,19 @@
             cursor: pointer;
         }
         .piid-link:hover { text-decoration: underline; }
+        .method-badge {
+            display: inline-block;
+            padding: 1px 8px;
+            border-radius: 10px;
+            font-size: 0.72rem;
+            font-weight: 600;
+            color: #fff;
+            vertical-align: middle;
+        }
+        .method-solicitation   { background: #2D6A4F; }
+        .method-shared_ceiling { background: #1F6FEB; }
+        .method-piid_block     { background: #D4A03C; }
+        .method-singleton      { background: #A1A1A1; }
         .orders-popover {
             background: var(--color-bg);
             border: 1px solid var(--color-border);
@@ -95,6 +112,47 @@
         }
         .orders-popover td.num { text-align: right; font-variant-numeric: tabular-nums; }
         .orders-popover .empty { color: var(--color-text-muted); font-style: italic; padding: 1rem 0; }
+        .method-card {
+            background: var(--color-card-bg, #fff);
+            border: 1px solid var(--color-border);
+            border-radius: var(--card-radius);
+            padding: 1rem 1.25rem;
+            margin-bottom: 1.25rem;
+        }
+        .method-card h3 {
+            margin: 0 0 0.35rem;
+            font-family: 'DM Sans', sans-serif;
+        }
+        .method-card .method-meta {
+            color: var(--color-text-muted);
+            font-size: 0.875rem;
+            margin-bottom: 0.75rem;
+        }
+        .method-card table {
+            width: 100%;
+            font-size: 0.875rem;
+            border-collapse: collapse;
+        }
+        .method-card th, .method-card td {
+            padding: 6px 10px;
+            border-bottom: 1px solid var(--color-border);
+            vertical-align: top;
+        }
+        .method-card th {
+            font-family: 'DM Sans', sans-serif;
+            font-weight: 600;
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            color: var(--color-text-muted);
+            text-align: left;
+        }
+        .method-card td.num { text-align: right; font-variant-numeric: tabular-nums; }
+        .method-card .piid-list {
+            font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+            font-size: 0.8rem;
+            color: var(--color-text-muted);
+        }
     </style>
 </head>
 <body>
@@ -104,87 +162,148 @@
     <div class="site-container">
         <header class="site-header">
             <h1>Defense Contract Vehicles</h1>
-            <p class="site-subtitle">Parent IDIQs, BPAs, GWACs, and FSS schedules — the ordering vehicles themselves, with rolled-up stats across every order placed under each.</p>
+            <p class="site-subtitle">Parent IDIQs, BPAs, GWACs, and FSS schedules — with multi-award MATOC siblings grouped into families so shared ceilings don't double-count.</p>
             <nav class="page-nav">
-                <a href="index.html" class="active">Dashboard</a>
+                <a data-tab="families" class="tab-link active">Families</a>
+                <a data-tab="vehicles" class="tab-link">Vehicles</a>
+                <a data-tab="grouping" class="tab-link">Grouping Methods</a>
                 <a href="methodology.html">Methodology</a>
             </nav>
         </header>
 
-        <div id="toolbarButtons" class="toolbar-row"></div>
-        <div class="filters-bar-container">
-            <div class="filters-bar" id="filtersBar">
-                <span class="filters-bar-empty">No filters applied</span>
+        <!-- =================== FAMILIES TAB =================== -->
+        <div id="tab-families" class="tab-pane active">
+            <div id="familiesToolbar" class="toolbar-row"></div>
+            <div class="filters-bar-container">
+                <div class="filters-bar" id="familiesFiltersBar">
+                    <span class="filters-bar-empty">No filters applied</span>
+                </div>
+            </div>
+
+            <div class="stats-row">
+                <div class="stat-card"><h3>Active Families</h3>   <div class="stat-value" id="famStatActive">--</div></div>
+                <div class="stat-card"><h3>Sibling Vehicles</h3>  <div class="stat-value" id="famStatMembers">--</div></div>
+                <div class="stat-card"><h3>Total Ceiling</h3>     <div class="stat-value" id="famStatCeiling">--</div></div>
+                <div class="stat-card"><h3>Ceiling Remaining</h3> <div class="stat-value" id="famStatRemaining">--</div></div>
+                <div class="stat-card"><h3>Unique Contractors</h3><div class="stat-value" id="famStatContractors">--</div></div>
+            </div>
+
+            <section class="charts-section">
+                <div class="charts-grid">
+                    <div class="chart-card chart-tall">
+                        <h3>Top sub-agencies (by family count)</h3>
+                        <canvas id="chartFamAgency"></canvas>
+                    </div>
+                    <div class="chart-card">
+                        <h3>Family size distribution</h3>
+                        <small class="text-muted">How many sibling IDVs in each family</small>
+                        <canvas id="chartFamSize"></canvas>
+                    </div>
+                </div>
+            </section>
+
+            <div id="famLoadingBox" class="loading-text" style="padding: 2rem 0;">Loading families...</div>
+            <div class="table-scroll-wrapper" id="famTableWrap" style="display:none;">
+                <table id="familiesTable" class="table" style="width:100%">
+                    <thead>
+                        <tr>
+                            <th>Status</th>
+                            <th>Method</th>
+                            <th>Description / PIIDs</th>
+                            <th>Sub-Agency</th>
+                            <th>Office</th>
+                            <th class="dt-right">Members</th>
+                            <th class="dt-right">Orders</th>
+                            <th class="dt-right">Contractors</th>
+                            <th>Top Contractors</th>
+                            <th>NAICS</th>
+                            <th>Latest End</th>
+                            <th class="dt-right">Ceiling</th>
+                            <th class="dt-right">Obligated</th>
+                            <th class="dt-right">Remaining</th>
+                            <th class="dt-right">% Used</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
             </div>
         </div>
 
-        <div class="stats-row">
-            <div class="stat-card">
-                <h3>Active Vehicles</h3>
-                <div class="stat-value" id="statActive">--</div>
+        <!-- =================== VEHICLES TAB =================== -->
+        <div id="tab-vehicles" class="tab-pane">
+            <div id="vehiclesToolbar" class="toolbar-row"></div>
+            <div class="filters-bar-container">
+                <div class="filters-bar" id="vehiclesFiltersBar">
+                    <span class="filters-bar-empty">No filters applied</span>
+                </div>
             </div>
-            <div class="stat-card">
-                <h3>Total Orders</h3>
-                <div class="stat-value" id="statOrders">--</div>
+
+            <div class="stats-row">
+                <div class="stat-card"><h3>Active Vehicles</h3>   <div class="stat-value" id="statActive">--</div></div>
+                <div class="stat-card"><h3>Total Orders</h3>      <div class="stat-value" id="statOrders">--</div></div>
+                <div class="stat-card"><h3>Sum of Ceilings</h3>   <div class="stat-value" id="statCeiling">--</div></div>
+                <div class="stat-card"><h3>Ceiling Remaining</h3> <div class="stat-value" id="statRemaining">--</div></div>
+                <div class="stat-card"><h3>Unique Contractors</h3><div class="stat-value" id="statContractors">--</div></div>
             </div>
-            <div class="stat-card">
-                <h3>Total Ceiling</h3>
-                <div class="stat-value" id="statCeiling">--</div>
-            </div>
-            <div class="stat-card">
-                <h3>Ceiling Remaining</h3>
-                <div class="stat-value" id="statRemaining">--</div>
-            </div>
-            <div class="stat-card">
-                <h3>Unique Contractors</h3>
-                <div class="stat-value" id="statContractors">--</div>
+
+            <p class="text-muted" style="font-size:0.85rem; margin-top:-0.5rem;">
+                Heads-up: on this tab, summing ceilings across rows double-counts shared MATOC pools (each sibling IDV carries the full pool value). For a deduped total, use the Families tab.
+            </p>
+
+            <section class="charts-section">
+                <div class="charts-grid">
+                    <div class="chart-card chart-tall">
+                        <h3>Top sub-agencies (by vehicle count)</h3>
+                        <canvas id="chartAgency"></canvas>
+                    </div>
+                    <div class="chart-card">
+                        <h3>Ceiling utilization buckets</h3>
+                        <small class="text-muted">Share of ceiling obligated across all orders on the vehicle</small>
+                        <canvas id="chartUtil"></canvas>
+                    </div>
+                </div>
+            </section>
+
+            <div id="loadingBox" class="loading-text" style="padding: 2rem 0;">Loading vehicles...</div>
+            <div class="table-scroll-wrapper" id="tableWrap" style="display:none;">
+                <table id="vehiclesTable" class="table" style="width:100%">
+                    <thead>
+                        <tr>
+                            <th>Status</th>
+                            <th>Parent PIID</th>
+                            <th>Family</th>
+                            <th>Type</th>
+                            <th>Sub-Agency</th>
+                            <th>Office</th>
+                            <th class="dt-right">Orders</th>
+                            <th class="dt-right">Active</th>
+                            <th class="dt-right">Contractors</th>
+                            <th>Top Contractors</th>
+                            <th>NAICS</th>
+                            <th>Latest End</th>
+                            <th class="dt-right">Ceiling</th>
+                            <th class="dt-right">Obligated</th>
+                            <th class="dt-right">Remaining</th>
+                            <th class="dt-right">% Used</th>
+                            <th>States</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
             </div>
         </div>
 
-        <section class="charts-section">
-            <div class="charts-grid">
-                <div class="chart-card chart-tall">
-                    <h3>Top sub-agencies (by vehicle count)</h3>
-                    <canvas id="chartAgency"></canvas>
-                </div>
-                <div class="chart-card">
-                    <h3>Ceiling utilization buckets</h3>
-                    <small class="text-muted">Share of ceiling obligated across all orders on the vehicle</small>
-                    <canvas id="chartUtil"></canvas>
-                </div>
+        <!-- =================== GROUPING METHODS TAB =================== -->
+        <div id="tab-grouping" class="tab-pane">
+            <div id="groupingContent">
+                <p class="loading-text">Loading grouping audit...</p>
             </div>
-        </section>
-
-        <div id="loadingBox" class="loading-text" style="padding: 2rem 0;">Loading vehicle rollup...</div>
-        <div class="table-scroll-wrapper" id="tableWrap" style="display:none;">
-            <table id="vehiclesTable" class="table" style="width:100%">
-                <thead>
-                    <tr>
-                        <th>Status</th>
-                        <th>Parent PIID</th>
-                        <th>Type</th>
-                        <th>Sub-Agency</th>
-                        <th>Office</th>
-                        <th class="dt-right">Orders</th>
-                        <th class="dt-right">Active</th>
-                        <th class="dt-right">Contractors</th>
-                        <th>Top Contractors</th>
-                        <th>NAICS</th>
-                        <th>Latest End</th>
-                        <th class="dt-right">Total Ceiling</th>
-                        <th class="dt-right">Obligated</th>
-                        <th class="dt-right">Remaining</th>
-                        <th class="dt-right">% Used</th>
-                        <th>States</th>
-                    </tr>
-                </thead>
-                <tbody></tbody>
-            </table>
         </div>
 
         <footer class="site-footer">
             <p>
                 Data from <a href="https://www.usaspending.gov/">USASpending bulk archives</a>
+                &middot; Spot-check via <a href="https://www.war.gov/News/Contracts/" target="_blank" rel="noopener">war.gov/News/Contracts</a>
                 &middot; Code on <a href="https://github.com/abigailhaddad/dod-contract-vehicles">GitHub</a>
                 &middot; As of <span id="asOf">--</span>
             </p>
@@ -199,51 +318,13 @@
     <script>
     window.API_BASE = '';
 
-    const COLUMNS = [
-        { name: 'Status',        field: 'status',         filterType: 'multiselect', index: 0 },
-        { name: 'Parent PIID',   field: 'parent_piid',    filterType: 'text',        index: 1 },
-        { name: 'Type',          field: 'parent_award_type', filterType: 'multiselect', index: 2 },
-        { name: 'Sub-Agency',    field: 'sub_agency',     filterType: 'multiselect', index: 3 },
-        { name: 'Office',        field: 'awarding_office',filterType: 'multiselect', index: 4 },
-        { name: 'Orders',        field: 'order_count',    filterType: 'range',       index: 5 },
-        { name: 'Active Orders', field: 'active_orders',  filterType: 'range',       index: 6 },
-        { name: 'Contractors',   field: 'contractor_count', filterType: 'range',     index: 7 },
-        { name: 'Contractor Name', field: 'contractors',  filterType: 'text',        index: 8 },
-        { name: 'NAICS',         field: 'naics_codes',    filterType: 'text',        index: 9 },
-        { name: 'Latest End',    field: 'latest_end',     filterType: 'daterange',   index: 10 },
-        { name: 'Total Ceiling', field: 'total_ceiling',  filterType: 'range', index: 11, format: 'currency' },
-        { name: 'Obligated',     field: 'total_obligated',filterType: 'range', index: 12, format: 'currency' },
-        { name: 'Remaining',     field: 'ceiling_remaining', filterType: 'range', index: 13, format: 'currency' },
-        { name: '% Used',        field: 'pct_ceiling_used', filterType: 'range',    index: 14 },
-        { name: 'States',        field: 'states',         filterType: 'multiselect', index: 15 },
-    ];
-
-    Chart.defaults.font.family = "'Source Sans 3', sans-serif";
-    Chart.defaults.color = '#7A6E62';
-
-    const CHART_COLORS = {
-        primary: '#2D6A4F',
-        primaryLight: 'rgba(45, 106, 79, 0.7)',
-        highlight: '#D4A03C',
-        grid: '#E8DDD0',
-        tickLabel: '#7A6E62',
-    };
-
-    const CHART_TOOLTIP = {
-        backgroundColor: '#2A211A',
-        titleColor: '#F5EDE0',
-        bodyColor: '#F5EDE0',
-        borderColor: '#3D2B1F',
-        borderWidth: 1,
-        cornerRadius: 6,
-        titleFont: { family: "'Source Sans 3', sans-serif", weight: 600 },
-        bodyFont: { family: "'Source Sans 3', sans-serif" },
-        padding: 10,
-    };
-
+    // ------------------------------------------------------------------
+    // Helpers
+    // ------------------------------------------------------------------
     function fmtDollarsShort(n) {
         if (n == null || isNaN(n)) return '--';
         const abs = Math.abs(n);
+        if (abs >= 1e12) return '$' + (n / 1e12).toFixed(1) + 'T';
         if (abs >= 1e9) return '$' + (n / 1e9).toFixed(1) + 'B';
         if (abs >= 1e6) return '$' + (n / 1e6).toFixed(1) + 'M';
         if (abs >= 1e3) return '$' + Math.round(n / 1e3) + 'K';
@@ -259,17 +340,36 @@
         return '<span class="' + cls + '">' + escapeHtml(s) + '</span>';
     }
 
-    // --- Custom text-match behavior for array fields (contractors, naics_codes).
-    // The default _rowMatches in shared.js handles arrays as multiselect but not
-    // substring text-search. We customize by subclassing.
+    function methodBadge(m) {
+        if (!m) return '';
+        return '<span class="method-badge method-' + m + '">' + m + '</span>';
+    }
+
+    Chart.defaults.font.family = "'Source Sans 3', sans-serif";
+    Chart.defaults.color = '#7A6E62';
+
+    const CHART_COLORS = {
+        primary: '#2D6A4F',
+        primaryLight: 'rgba(45, 106, 79, 0.7)',
+        highlight: '#D4A03C',
+        grid: '#E8DDD0',
+        tickLabel: '#7A6E62',
+    };
+    const CHART_TOOLTIP = {
+        backgroundColor: '#2A211A', titleColor: '#F5EDE0', bodyColor: '#F5EDE0',
+        borderColor: '#3D2B1F', borderWidth: 1, cornerRadius: 6,
+        titleFont: { family: "'Source Sans 3', sans-serif", weight: 600 },
+        bodyFont: { family: "'Source Sans 3', sans-serif" }, padding: 10,
+    };
+
+    // Filter manager extended to support array-typed text search
     class VehicleFilterManager extends ServerSideFilterManager {
         _rowMatches(row) {
             for (const [field, filter] of Object.entries(this.activeFilters)) {
                 const val = row[field];
                 if (filter.type === 'multiselect') {
                     if (Array.isArray(val)) {
-                        const anyMatch = val.some(v => filter.values.includes(String(v)));
-                        if (!anyMatch) return false;
+                        if (!val.some(v => filter.values.includes(String(v)))) return false;
                     } else {
                         if (val == null || !filter.values.includes(String(val))) return false;
                     }
@@ -293,23 +393,64 @@
                     } else {
                         hay = String(val).toLowerCase();
                     }
-                    const anyMatch = terms.some(t => hay.includes(t));
-                    if (!anyMatch) return false;
+                    if (!terms.some(t => hay.includes(t))) return false;
                 }
             }
             return true;
         }
     }
 
-    let chartAgency = null, chartUtil = null;
+    const DATA_BASE = window.DATA_BASE
+        || (location.hostname === 'localhost' || location.hostname === '127.0.0.1'
+            ? 'data'
+            : 'https://pub-9f4e2a3f6cb94f8a9965f749fae53430.r2.dev/dashboard_data');
 
-    function createCharts() {
-        chartAgency = new Chart(document.getElementById('chartAgency'), {
+    // ------------------------------------------------------------------
+    // Tab switching
+    // ------------------------------------------------------------------
+    function activateTab(tabName) {
+        document.querySelectorAll('.tab-link').forEach(a => {
+            a.classList.toggle('active', a.dataset.tab === tabName);
+        });
+        document.querySelectorAll('.tab-pane').forEach(el => {
+            el.classList.toggle('active', el.id === 'tab-' + tabName);
+        });
+        // Re-draw any DataTables that were hidden on init (column widths go wrong otherwise)
+        if (tabName === 'vehicles' && window.vehiclesDT) window.vehiclesDT.columns.adjust();
+        if (tabName === 'families' && window.familiesDT) window.familiesDT.columns.adjust();
+    }
+
+    // ------------------------------------------------------------------
+    // FAMILIES tab
+    // ------------------------------------------------------------------
+    const FAM_COLUMNS = [
+        { name: 'Status',        field: 'status',          filterType: 'multiselect', index: 0 },
+        { name: 'Method',        field: 'family_method',   filterType: 'multiselect', index: 1 },
+        { name: 'Description',   field: 'description',     filterType: 'text',        index: 2 },
+        { name: 'Sub-Agency',    field: 'sub_agency',      filterType: 'multiselect', index: 3 },
+        { name: 'Office',        field: 'awarding_office', filterType: 'multiselect', index: 4 },
+        { name: 'Members',       field: 'member_count',    filterType: 'range',       index: 5 },
+        { name: 'Orders',        field: 'order_count',     filterType: 'range',       index: 6 },
+        { name: 'Contractors',   field: 'contractor_count',filterType: 'range',       index: 7 },
+        { name: 'Contractor Name', field: 'contractors',   filterType: 'text',        index: 8 },
+        { name: 'NAICS',         field: 'naics_codes',     filterType: 'text',        index: 9 },
+        { name: 'Latest End',    field: 'latest_end',      filterType: 'daterange',   index: 10 },
+        { name: 'Ceiling',       field: 'family_ceiling',  filterType: 'range', index: 11, format: 'currency' },
+        { name: 'Obligated',     field: 'total_obligated', filterType: 'range', index: 12, format: 'currency' },
+        { name: 'Remaining',     field: 'ceiling_remaining', filterType: 'range', index: 13, format: 'currency' },
+        { name: '% Used',        field: 'pct_ceiling_used',filterType: 'range',       index: 14 },
+    ];
+
+    let allFamilies = [];
+    let famFilterManager = null;
+    let chartFamAgency = null, chartFamSize = null;
+
+    function createFamilyCharts() {
+        chartFamAgency = new Chart(document.getElementById('chartFamAgency'), {
             type: 'bar',
-            data: { labels: [], datasets: [{ label: 'Vehicles', data: [], backgroundColor: CHART_COLORS.primary, borderWidth: 0 }] },
+            data: { labels: [], datasets: [{ label: 'Families', data: [], backgroundColor: CHART_COLORS.primary, borderWidth: 0 }] },
             options: {
-                indexAxis: 'y',
-                responsive: true, maintainAspectRatio: false,
+                indexAxis: 'y', responsive: true, maintainAspectRatio: false,
                 plugins: { legend: { display: false }, tooltip: CHART_TOOLTIP },
                 scales: {
                     x: { beginAtZero: true, grid: { color: CHART_COLORS.grid }, ticks: { color: CHART_COLORS.tickLabel } },
@@ -317,151 +458,123 @@
                 },
             },
         });
-
-        chartUtil = new Chart(document.getElementById('chartUtil'), {
+        chartFamSize = new Chart(document.getElementById('chartFamSize'), {
             type: 'bar',
-            data: { labels: [], datasets: [{ label: 'Vehicles', data: [], backgroundColor: CHART_COLORS.highlight, borderWidth: 0 }] },
+            data: { labels: [], datasets: [{ label: 'Families', data: [], backgroundColor: CHART_COLORS.highlight, borderWidth: 0 }] },
             options: {
                 responsive: true, maintainAspectRatio: false,
                 plugins: { legend: { display: false }, tooltip: CHART_TOOLTIP },
                 scales: {
-                    y: {
-                        beginAtZero: true,
-                        grid: { color: CHART_COLORS.grid },
-                        ticks: {
-                            color: CHART_COLORS.tickLabel, precision: 0,
-                            callback: v => v >= 1000 ? (v / 1000).toFixed(0) + 'K' : v,
-                        },
-                    },
+                    y: { beginAtZero: true, grid: { color: CHART_COLORS.grid },
+                         ticks: { color: CHART_COLORS.tickLabel, precision: 0, callback: v => v >= 1000 ? (v/1000).toFixed(0)+'K' : v } },
                     x: { grid: { display: false }, ticks: { color: CHART_COLORS.tickLabel } },
                 },
             },
         });
     }
 
-    function updateCharts(rows) {
-        // Top sub-agencies
+    function updateFamilyCharts(rows) {
         const agencyCounts = {};
         for (const r of rows) {
             const a = r.sub_agency || '(none)';
             agencyCounts[a] = (agencyCounts[a] || 0) + 1;
         }
-        const topAgencies = Object.entries(agencyCounts).sort((a, b) => b[1] - a[1]).slice(0, 15);
-        chartAgency.data.labels = topAgencies.map(x => x[0]);
-        chartAgency.data.datasets[0].data = topAgencies.map(x => x[1]);
-        chartAgency.update();
+        const top = Object.entries(agencyCounts).sort((a, b) => b[1] - a[1]).slice(0, 15);
+        chartFamAgency.data.labels = top.map(x => x[0]);
+        chartFamAgency.data.datasets[0].data = top.map(x => x[1]);
+        chartFamAgency.update();
 
-        // Ceiling utilization buckets
-        const buckets = [
-            { label: '0%', min: 0, max: 0.0001 },
-            { label: '1-25%', min: 0.0001, max: 25 },
-            { label: '25-50%', min: 25, max: 50 },
-            { label: '50-75%', min: 50, max: 75 },
-            { label: '75-99%', min: 75, max: 99.9999 },
-            { label: '100%+', min: 99.9999, max: Infinity },
+        const sizeBuckets = [
+            { label: '1 (singleton)', min: 1, max: 1 },
+            { label: '2', min: 2, max: 2 },
+            { label: '3-5', min: 3, max: 5 },
+            { label: '6-10', min: 6, max: 10 },
+            { label: '11-25', min: 11, max: 25 },
+            { label: '26-100', min: 26, max: 100 },
+            { label: '100+', min: 101, max: Infinity },
         ];
-        const bucketCounts = buckets.map(() => 0);
+        const counts = sizeBuckets.map(() => 0);
         for (const r of rows) {
-            const p = Number(r.pct_ceiling_used);
-            if (!isFinite(p)) continue;
-            for (let i = 0; i < buckets.length; i++) {
-                if (p >= buckets[i].min && p < buckets[i].max) { bucketCounts[i]++; break; }
+            const c = r.member_count || 1;
+            for (let i = 0; i < sizeBuckets.length; i++) {
+                if (c >= sizeBuckets[i].min && c <= sizeBuckets[i].max) { counts[i]++; break; }
             }
         }
-        chartUtil.data.labels = buckets.map(b => b.label);
-        chartUtil.data.datasets[0].data = bucketCounts;
-        chartUtil.update();
+        chartFamSize.data.labels = sizeBuckets.map(b => b.label);
+        chartFamSize.data.datasets[0].data = counts;
+        chartFamSize.update();
     }
 
-    function updateStats(rows) {
-        // "Active" includes Expiring Soon (both are in-force).
+    function updateFamilyStats(rows) {
         const active = rows.filter(r => r.status === 'Active' || r.status === 'Expiring Soon').length;
-        let orders = 0, ceiling = 0, remaining = 0;
+        let members = 0, ceiling = 0, remaining = 0;
         const contractorSet = new Set();
         for (const r of rows) {
-            if (typeof r.order_count === 'number') orders += r.order_count;
-            if (typeof r.total_ceiling === 'number') ceiling += r.total_ceiling;
+            if (typeof r.member_count === 'number') members += r.member_count;
+            if (typeof r.family_ceiling === 'number') ceiling += r.family_ceiling;
             if (typeof r.ceiling_remaining === 'number') remaining += r.ceiling_remaining;
-            if (Array.isArray(r.contractors)) {
-                for (const c of r.contractors) contractorSet.add(c);
-            }
+            if (Array.isArray(r.contractors)) for (const c of r.contractors) contractorSet.add(c);
         }
-        document.getElementById('statActive').textContent = active.toLocaleString();
-        document.getElementById('statOrders').textContent = orders.toLocaleString();
-        document.getElementById('statCeiling').textContent = fmtDollarsShort(ceiling);
-        document.getElementById('statRemaining').textContent = fmtDollarsShort(remaining);
-        document.getElementById('statContractors').textContent = contractorSet.size.toLocaleString();
+        document.getElementById('famStatActive').textContent = active.toLocaleString();
+        document.getElementById('famStatMembers').textContent = members.toLocaleString();
+        document.getElementById('famStatCeiling').textContent = fmtDollarsShort(ceiling);
+        document.getElementById('famStatRemaining').textContent = fmtDollarsShort(remaining);
+        document.getElementById('famStatContractors').textContent = contractorSet.size.toLocaleString();
     }
 
-    let allVehicles = [];
-    let filterManager = null;
-    let table = null;
+    function initFamiliesTab(families) {
+        allFamilies = families;
+        createFamilyCharts();
 
-    // Local dev fetches from web/data/; deployed site fetches from the public
-    // R2 bucket. Override by setting window.DATA_BASE before this script runs.
-    const DATA_BASE = window.DATA_BASE
-        || (location.hostname === 'localhost' || location.hostname === '127.0.0.1'
-            ? 'data'
-            : 'https://pub-9f4e2a3f6cb94f8a9965f749fae53430.r2.dev/dashboard_data');
-
-    async function init() {
-        createCharts();
-
-        const [summary, vehicles] = await Promise.all([
-            fetch(DATA_BASE + '/summary.json').then(r => r.json()),
-            fetch(DATA_BASE + '/vehicles.json').then(r => r.json()),
-        ]);
-
-        allVehicles = vehicles;
-        document.getElementById('asOf').textContent = summary.as_of || '';
-
-        filterManager = new VehicleFilterManager({
-            tableSelector: '#vehiclesTable',
-            columns: COLUMNS,
-            filterBarId: 'filtersBar',
-            syncURL: true,
-            showCopyLinkButton: true,
+        famFilterManager = new VehicleFilterManager({
+            tableSelector: '#familiesTable',
+            columns: FAM_COLUMNS,
+            filterBarId: 'familiesFiltersBar',
+            syncURL: false,
+            showCopyLinkButton: false,
             clientSide: true,
-            data: allVehicles,
+            data: allFamilies,
             onFilterChange: function () {
-                const filtered = filterManager.getFilteredData();
-                updateStats(filtered);
-                updateCharts(filtered);
+                const filtered = famFilterManager.getFilteredData();
+                updateFamilyStats(filtered);
+                updateFamilyCharts(filtered);
             },
         });
 
         $.fn.dataTable.ext.search.push(function (settings, searchData, dataIndex, rowData) {
-            if (settings.nTable.id !== 'vehiclesTable') return true;
-            if (!filterManager) return true;
-            return filterManager._rowMatches(rowData);
+            if (settings.nTable.id !== 'familiesTable') return true;
+            if (!famFilterManager) return true;
+            return famFilterManager._rowMatches(rowData);
         });
 
-        document.getElementById('loadingBox').style.display = 'none';
-        document.getElementById('tableWrap').style.display = '';
+        document.getElementById('famLoadingBox').style.display = 'none';
+        document.getElementById('famTableWrap').style.display = '';
 
-        table = $('#vehiclesTable').DataTable({
-            data: allVehicles,
+        window.familiesDT = $('#familiesTable').DataTable({
+            data: allFamilies,
             deferRender: true,
             columns: [
                 { data: 'status', render: (d, t) => t === 'display' ? statusRender(d) : (d || '') },
+                { data: 'family_method', render: (d, t) => t === 'display' ? methodBadge(d) : (d || '') },
                 {
-                    data: 'parent_piid',
-                    defaultContent: '',
-                    render: (d, t) => {
+                    data: 'description',
+                    render: (d, t, row) => {
                         if (t !== 'display') return d || '';
-                        if (!d) return '';
-                        return '<a class="piid-link" data-piid="' + escapeHtml(d) + '" tabindex="0" title="Show orders on this vehicle">' + escapeHtml(d) + '</a>';
+                        const piids = (row.member_piids || []).slice(0, 3).join(', ') +
+                                      ((row.member_piids || []).length > 3 ? ', +' + ((row.member_piids || []).length - 3) : '');
+                        const full = (row.member_piids || []).join(', ');
+                        const descHtml = d ? '<div>' + escapeHtml(d.slice(0, 120)) + (d.length > 120 ? '…' : '') + '</div>' : '';
+                        const piidHtml = '<a class="piid-link" data-famid="' + escapeHtml(row.family_id) + '" title="' + escapeHtml(full) + '">' + escapeHtml(piids) + '</a>';
+                        return descHtml + piidHtml;
                     },
                 },
-                { data: 'parent_award_type', defaultContent: '', render: (d, t) => t === 'display' ? escapeHtml(d || '') : (d || '') },
                 { data: 'sub_agency', defaultContent: '', render: (d, t) => t === 'display' ? escapeHtml(d || '') : (d || '') },
                 { data: 'awarding_office', defaultContent: '', render: (d, t) => t === 'display' ? escapeHtml(d || '') : (d || '') },
+                { data: 'member_count', className: 'dt-right', render: (d, t) => t === 'display' ? (d == null ? '' : d.toLocaleString()) : (d || 0) },
                 { data: 'order_count', className: 'dt-right', render: (d, t) => t === 'display' ? (d == null ? '' : d.toLocaleString()) : (d || 0) },
-                { data: 'active_orders', className: 'dt-right', render: (d, t) => t === 'display' ? (d == null ? '' : d.toLocaleString()) : (d || 0) },
                 { data: 'contractor_count', className: 'dt-right', render: (d, t) => t === 'display' ? (d == null ? '' : d.toLocaleString()) : (d || 0) },
                 {
-                    data: 'contractors',
-                    orderable: false,
+                    data: 'contractors', orderable: false,
                     render: (d, t) => {
                         if (t !== 'display') return Array.isArray(d) ? d.join(' | ') : (d || '');
                         if (!d || !d.length) return '';
@@ -471,8 +584,7 @@
                     },
                 },
                 {
-                    data: 'naics_codes',
-                    orderable: false,
+                    data: 'naics_codes', orderable: false,
                     render: (d, t) => {
                         if (t !== 'display') return Array.isArray(d) ? d.join(' | ') : (d || '');
                         if (!d || !d.length) return '';
@@ -481,31 +593,276 @@
                     },
                 },
                 { data: 'latest_end', defaultContent: '' },
-                { data: 'total_ceiling', className: 'dt-right', render: (d, t) => t === 'display' ? fmtDollarsShort(d) : (d || 0) },
+                { data: 'family_ceiling', className: 'dt-right', render: (d, t) => t === 'display' ? fmtDollarsShort(d) : (d || 0) },
                 { data: 'total_obligated', className: 'dt-right', render: (d, t) => t === 'display' ? fmtDollarsShort(d) : (d || 0) },
                 { data: 'ceiling_remaining', className: 'dt-right', render: (d, t) => t === 'display' ? fmtDollarsShort(d) : (d || 0) },
-                {
-                    data: 'pct_ceiling_used',
-                    className: 'dt-right',
-                    render: (d, t) => {
-                        if (t !== 'display') return d == null ? 0 : d;
-                        return d == null ? '--' : (Math.round(d * 10) / 10) + '%';
-                    },
-                },
-                {
-                    data: 'states',
-                    orderable: false,
-                    render: (d, t) => {
-                        if (t !== 'display') return Array.isArray(d) ? d.join(' ') : (d || '');
-                        if (!d || !d.length) return '';
-                        const preview = d.slice(0, 5).join(', ') + (d.length > 5 ? ', +' + (d.length - 5) : '');
-                        return '<span class="list-cell" tabindex="0" title="' + escapeHtml(d.join(', ')) + '">' + escapeHtml(preview) + '</span>';
-                    },
-                },
+                { data: 'pct_ceiling_used', className: 'dt-right',
+                  render: (d, t) => { if (t !== 'display') return d == null ? 0 : d;
+                                      return d == null ? '--' : (Math.round(d * 10) / 10) + '%'; } },
             ],
             pageLength: 25,
             lengthMenu: [10, 25, 50, 100, 250],
-            order: [[13, 'desc']], // ceiling_remaining desc
+            order: [[13, 'desc']],
+            language: {
+                emptyTable: 'No families match these filters',
+                zeroRecords: 'No families match these filters',
+                thousands: ',',
+                info: 'Showing _START_ to _END_ of _TOTAL_ families',
+                infoFiltered: ' (filtered from _MAX_ total)',
+                infoEmpty: 'No families',
+            },
+            pagingType: 'simple_numbers',
+            dom: '<"d-flex justify-content-between align-items-center"lip>rt<"d-flex justify-content-between align-items-center"lip>',
+        });
+        famFilterManager.init(window.familiesDT);
+
+        const famCsvBtn = document.createElement('button');
+        famCsvBtn.className = 'csv-download-btn';
+        famCsvBtn.textContent = 'Download CSV';
+        famCsvBtn.addEventListener('click', () => {
+            const rows = famFilterManager.getFilteredData();
+            downloadCSV(rows, FAM_COLUMNS, 'dod_families.csv');
+        });
+        document.getElementById('familiesToolbar').appendChild(famCsvBtn);
+
+        // Drill-down: click description/PIIDs to see sibling vehicles.
+        $('#familiesTable tbody').on('click', 'a.piid-link', function(e) {
+            e.preventDefault();
+            const famId = $(this).data('famid');
+            const fam = allFamilies.find(f => f.family_id === famId);
+            if (fam) showFamilyDrilldown(fam);
+        });
+
+        const initial = famFilterManager.getFilteredData();
+        updateFamilyStats(initial);
+        updateFamilyCharts(initial);
+    }
+
+    function showFamilyDrilldown(fam) {
+        const members = (allVehicles || []).filter(v => v.family_id === fam.family_id);
+        members.sort((a, b) => (b.total_ceiling || 0) - (a.total_ceiling || 0));
+        const rows = members.map(v => {
+            const statusCls = v.status === 'Active' ? 'status-active'
+                : v.status === 'Expiring Soon' ? 'status-expiring'
+                : v.status === 'Expired' ? 'status-expired' : 'status-unknown';
+            return '<tr>' +
+                '<td>' + escapeHtml(v.parent_piid || '') + '</td>' +
+                '<td>' + escapeHtml((v.contractors || []).join(', ')) + '</td>' +
+                '<td class="num">' + fmtDollarsShort(v.total_ceiling) + '</td>' +
+                '<td class="num">' + fmtDollarsShort(v.total_obligated) + '</td>' +
+                '<td class="num">' + (v.order_count || 0) + '</td>' +
+                '<td>' + escapeHtml(v.latest_end || '') + '</td>' +
+                '<td><span class="' + statusCls + '">' + escapeHtml(v.status || '') + '</span></td>' +
+            '</tr>';
+        }).join('');
+
+        // Spot-check link: search war.gov for the awardee names
+        const warQ = (fam.contractors || []).slice(0, 3).join(' ');
+        const warUrl = 'https://www.war.gov/DesktopModules/ArticleCS/Search.aspx?sitename=Contracts&q=' + encodeURIComponent(warQ);
+        const solLink = fam.primary_solicitation
+            ? ' &middot; <a href="https://sam.gov/search/?keywords=' + encodeURIComponent(fam.primary_solicitation) + '&index=opp" target="_blank" rel="noopener">solicitation on SAM.gov</a>'
+            : '';
+
+        const meta = fam.member_count + ' member IDV' + (fam.member_count === 1 ? '' : 's') +
+                     ' &middot; ' + methodBadge(fam.family_method) +
+                     ' &middot; <a href="' + warUrl + '" target="_blank" rel="noopener">spot-check on war.gov</a>' +
+                     solLink;
+
+        const body = members.length
+            ? '<table><thead><tr><th>PIID</th><th>Contractor</th><th>Ceiling</th><th>Obligated</th><th>Orders</th><th>PoP End</th><th>Status</th></tr></thead><tbody>' + rows + '</tbody></table>'
+            : '<div class="empty">No member vehicles loaded.</div>';
+
+        const content = '<div class="orders-popover">' +
+            '<h3>' + escapeHtml((fam.description || fam.family_id).slice(0, 140)) + '</h3>' +
+            '<div class="orders-meta">' + meta + '</div>' +
+            body +
+        '</div>';
+        createModal({ content });
+    }
+
+    // ------------------------------------------------------------------
+    // VEHICLES tab (existing behavior, preserved)
+    // ------------------------------------------------------------------
+    const COLUMNS = [
+        { name: 'Status',        field: 'status',         filterType: 'multiselect', index: 0 },
+        { name: 'Parent PIID',   field: 'parent_piid',    filterType: 'text',        index: 1 },
+        { name: 'Family Method', field: 'family_method',  filterType: 'multiselect', index: 2 },
+        { name: 'Type',          field: 'parent_award_type', filterType: 'multiselect', index: 3 },
+        { name: 'Sub-Agency',    field: 'sub_agency',     filterType: 'multiselect', index: 4 },
+        { name: 'Office',        field: 'awarding_office',filterType: 'multiselect', index: 5 },
+        { name: 'Orders',        field: 'order_count',    filterType: 'range',       index: 6 },
+        { name: 'Active Orders', field: 'active_orders',  filterType: 'range',       index: 7 },
+        { name: 'Contractors',   field: 'contractor_count', filterType: 'range',     index: 8 },
+        { name: 'Contractor Name', field: 'contractors',  filterType: 'text',        index: 9 },
+        { name: 'NAICS',         field: 'naics_codes',    filterType: 'text',        index: 10 },
+        { name: 'Latest End',    field: 'latest_end',     filterType: 'daterange',   index: 11 },
+        { name: 'Total Ceiling', field: 'total_ceiling',  filterType: 'range', index: 12, format: 'currency' },
+        { name: 'Obligated',     field: 'total_obligated',filterType: 'range', index: 13, format: 'currency' },
+        { name: 'Remaining',     field: 'ceiling_remaining', filterType: 'range', index: 14, format: 'currency' },
+        { name: '% Used',        field: 'pct_ceiling_used', filterType: 'range',    index: 15 },
+        { name: 'States',        field: 'states',         filterType: 'multiselect', index: 16 },
+    ];
+
+    let allVehicles = [];
+    let vehicleFilterManager = null;
+    let chartAgency = null, chartUtil = null;
+
+    function createVehicleCharts() {
+        chartAgency = new Chart(document.getElementById('chartAgency'), {
+            type: 'bar',
+            data: { labels: [], datasets: [{ label: 'Vehicles', data: [], backgroundColor: CHART_COLORS.primary, borderWidth: 0 }] },
+            options: {
+                indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: false }, tooltip: CHART_TOOLTIP },
+                scales: {
+                    x: { beginAtZero: true, grid: { color: CHART_COLORS.grid }, ticks: { color: CHART_COLORS.tickLabel } },
+                    y: { grid: { display: false }, ticks: { color: CHART_COLORS.tickLabel, font: { size: 11 } } },
+                },
+            },
+        });
+        chartUtil = new Chart(document.getElementById('chartUtil'), {
+            type: 'bar',
+            data: { labels: [], datasets: [{ label: 'Vehicles', data: [], backgroundColor: CHART_COLORS.highlight, borderWidth: 0 }] },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: false }, tooltip: CHART_TOOLTIP },
+                scales: {
+                    y: { beginAtZero: true, grid: { color: CHART_COLORS.grid },
+                         ticks: { color: CHART_COLORS.tickLabel, precision: 0, callback: v => v >= 1000 ? (v/1000).toFixed(0)+'K' : v } },
+                    x: { grid: { display: false }, ticks: { color: CHART_COLORS.tickLabel } },
+                },
+            },
+        });
+    }
+
+    function updateVehicleCharts(rows) {
+        const agencyCounts = {};
+        for (const r of rows) {
+            const a = r.sub_agency || '(none)';
+            agencyCounts[a] = (agencyCounts[a] || 0) + 1;
+        }
+        const top = Object.entries(agencyCounts).sort((a, b) => b[1] - a[1]).slice(0, 15);
+        chartAgency.data.labels = top.map(x => x[0]);
+        chartAgency.data.datasets[0].data = top.map(x => x[1]);
+        chartAgency.update();
+
+        const buckets = [
+            { label: '0%', min: 0, max: 0.0001 },
+            { label: '1-25%', min: 0.0001, max: 25 },
+            { label: '25-50%', min: 25, max: 50 },
+            { label: '50-75%', min: 50, max: 75 },
+            { label: '75-99%', min: 75, max: 99.9999 },
+            { label: '100%+', min: 99.9999, max: Infinity },
+        ];
+        const counts = buckets.map(() => 0);
+        for (const r of rows) {
+            const p = Number(r.pct_ceiling_used);
+            if (!isFinite(p)) continue;
+            for (let i = 0; i < buckets.length; i++) {
+                if (p >= buckets[i].min && p < buckets[i].max) { counts[i]++; break; }
+            }
+        }
+        chartUtil.data.labels = buckets.map(b => b.label);
+        chartUtil.data.datasets[0].data = counts;
+        chartUtil.update();
+    }
+
+    function updateVehicleStats(rows) {
+        const active = rows.filter(r => r.status === 'Active' || r.status === 'Expiring Soon').length;
+        let orders = 0, ceiling = 0, remaining = 0;
+        const contractorSet = new Set();
+        for (const r of rows) {
+            if (typeof r.order_count === 'number') orders += r.order_count;
+            if (typeof r.total_ceiling === 'number') ceiling += r.total_ceiling;
+            if (typeof r.ceiling_remaining === 'number') remaining += r.ceiling_remaining;
+            if (Array.isArray(r.contractors)) for (const c of r.contractors) contractorSet.add(c);
+        }
+        document.getElementById('statActive').textContent = active.toLocaleString();
+        document.getElementById('statOrders').textContent = orders.toLocaleString();
+        document.getElementById('statCeiling').textContent = fmtDollarsShort(ceiling);
+        document.getElementById('statRemaining').textContent = fmtDollarsShort(remaining);
+        document.getElementById('statContractors').textContent = contractorSet.size.toLocaleString();
+    }
+
+    function initVehiclesTab(vehicles) {
+        allVehicles = vehicles;
+        createVehicleCharts();
+
+        vehicleFilterManager = new VehicleFilterManager({
+            tableSelector: '#vehiclesTable',
+            columns: COLUMNS,
+            filterBarId: 'vehiclesFiltersBar',
+            syncURL: true,
+            showCopyLinkButton: true,
+            clientSide: true,
+            data: allVehicles,
+            onFilterChange: function () {
+                const filtered = vehicleFilterManager.getFilteredData();
+                updateVehicleStats(filtered);
+                updateVehicleCharts(filtered);
+            },
+        });
+
+        $.fn.dataTable.ext.search.push(function (settings, searchData, dataIndex, rowData) {
+            if (settings.nTable.id !== 'vehiclesTable') return true;
+            if (!vehicleFilterManager) return true;
+            return vehicleFilterManager._rowMatches(rowData);
+        });
+
+        document.getElementById('loadingBox').style.display = 'none';
+        document.getElementById('tableWrap').style.display = '';
+
+        window.vehiclesDT = $('#vehiclesTable').DataTable({
+            data: allVehicles,
+            deferRender: true,
+            columns: [
+                { data: 'status', render: (d, t) => t === 'display' ? statusRender(d) : (d || '') },
+                { data: 'parent_piid', defaultContent: '',
+                  render: (d, t) => {
+                      if (t !== 'display') return d || '';
+                      if (!d) return '';
+                      return '<a class="piid-link" data-piid="' + escapeHtml(d) + '" tabindex="0" title="Show orders on this vehicle">' + escapeHtml(d) + '</a>';
+                  } },
+                { data: 'family_method', render: (d, t) => t === 'display' ? methodBadge(d) : (d || '') },
+                { data: 'parent_award_type', defaultContent: '', render: (d, t) => t === 'display' ? escapeHtml(d || '') : (d || '') },
+                { data: 'sub_agency', defaultContent: '', render: (d, t) => t === 'display' ? escapeHtml(d || '') : (d || '') },
+                { data: 'awarding_office', defaultContent: '', render: (d, t) => t === 'display' ? escapeHtml(d || '') : (d || '') },
+                { data: 'order_count', className: 'dt-right', render: (d, t) => t === 'display' ? (d == null ? '' : d.toLocaleString()) : (d || 0) },
+                { data: 'active_orders', className: 'dt-right', render: (d, t) => t === 'display' ? (d == null ? '' : d.toLocaleString()) : (d || 0) },
+                { data: 'contractor_count', className: 'dt-right', render: (d, t) => t === 'display' ? (d == null ? '' : d.toLocaleString()) : (d || 0) },
+                { data: 'contractors', orderable: false,
+                  render: (d, t) => {
+                      if (t !== 'display') return Array.isArray(d) ? d.join(' | ') : (d || '');
+                      if (!d || !d.length) return '';
+                      const full = d.join(' | ');
+                      const preview = d.slice(0, 3).join(', ') + (d.length > 3 ? ', +' + (d.length - 3) + ' more' : '');
+                      return '<span class="list-cell" tabindex="0" title="' + escapeHtml(full) + '">' + escapeHtml(preview) + '</span>';
+                  } },
+                { data: 'naics_codes', orderable: false,
+                  render: (d, t) => {
+                      if (t !== 'display') return Array.isArray(d) ? d.join(' | ') : (d || '');
+                      if (!d || !d.length) return '';
+                      const preview = d.slice(0, 3).join(', ') + (d.length > 3 ? ', +' + (d.length - 3) : '');
+                      return '<span class="list-cell" tabindex="0" title="' + escapeHtml(d.join(', ')) + '">' + escapeHtml(preview) + '</span>';
+                  } },
+                { data: 'latest_end', defaultContent: '' },
+                { data: 'total_ceiling', className: 'dt-right', render: (d, t) => t === 'display' ? fmtDollarsShort(d) : (d || 0) },
+                { data: 'total_obligated', className: 'dt-right', render: (d, t) => t === 'display' ? fmtDollarsShort(d) : (d || 0) },
+                { data: 'ceiling_remaining', className: 'dt-right', render: (d, t) => t === 'display' ? fmtDollarsShort(d) : (d || 0) },
+                { data: 'pct_ceiling_used', className: 'dt-right',
+                  render: (d, t) => { if (t !== 'display') return d == null ? 0 : d;
+                                      return d == null ? '--' : (Math.round(d * 10) / 10) + '%'; } },
+                { data: 'states', orderable: false,
+                  render: (d, t) => {
+                      if (t !== 'display') return Array.isArray(d) ? d.join(' ') : (d || '');
+                      if (!d || !d.length) return '';
+                      const preview = d.slice(0, 5).join(', ') + (d.length > 5 ? ', +' + (d.length - 5) : '');
+                      return '<span class="list-cell" tabindex="0" title="' + escapeHtml(d.join(', ')) + '">' + escapeHtml(preview) + '</span>';
+                  } },
+            ],
+            pageLength: 25,
+            lengthMenu: [10, 25, 50, 100, 250],
+            order: [[14, 'desc']],
             language: {
                 emptyTable: 'No vehicles match these filters',
                 zeroRecords: 'No vehicles match these filters',
@@ -517,22 +874,17 @@
             pagingType: 'simple_numbers',
             dom: '<"d-flex justify-content-between align-items-center"lip>rt<"d-flex justify-content-between align-items-center"lip>',
         });
+        vehicleFilterManager.init(window.vehiclesDT);
 
-        filterManager.init(table);
-
-        // CSV download (client-side)
-        const toolbarEl = document.getElementById('toolbarButtons');
         const csvBtn = document.createElement('button');
         csvBtn.className = 'csv-download-btn';
         csvBtn.textContent = 'Download CSV';
-        csvBtn.title = 'Download filtered vehicles as CSV';
         csvBtn.addEventListener('click', () => {
-            const rows = filterManager.getFilteredData();
+            const rows = vehicleFilterManager.getFilteredData();
             downloadCSV(rows, COLUMNS, 'dod_vehicles.csv');
         });
-        toolbarEl.appendChild(csvBtn);
+        document.getElementById('vehiclesToolbar').appendChild(csvBtn);
 
-        // Drill-down: click a vehicle's PIID to see its orders.
         $('#vehiclesTable tbody').on('click', 'a.piid-link', function(e) {
             e.preventDefault();
             const piid = $(this).data('piid');
@@ -540,25 +892,24 @@
             if (vehicle) showOrdersModal(vehicle);
         });
 
-        const initial = filterManager.getFilteredData();
-        updateStats(initial);
-        updateCharts(initial);
+        const initial = vehicleFilterManager.getFilteredData();
+        updateVehicleStats(initial);
+        updateVehicleCharts(initial);
     }
 
     function showOrdersModal(v) {
         const orders = v.top_orders || [];
         const totalOrders = v.order_count || 0;
         const activeOrders = v.active_orders || 0;
-
         let body;
         if (!orders.length) {
             body = '<div class="empty">No order-level data captured for this vehicle' +
                    (totalOrders ? ' (expired orders excluded)' : '') + '.</div>';
         } else {
             const rows = orders.map(o => {
-                const statusCls = o.status === 'Active' ? 'status-active' :
-                                  o.status === 'Expiring Soon' ? 'status-expiring' :
-                                  o.status === 'Expired' ? 'status-expired' : 'status-unknown';
+                const statusCls = o.status === 'Active' ? 'status-active'
+                                : o.status === 'Expiring Soon' ? 'status-expiring'
+                                : o.status === 'Expired' ? 'status-expired' : 'status-unknown';
                 const piidCell = o.link
                     ? '<a href="' + escapeHtml(o.link) + '" target="_blank" rel="noopener">' + escapeHtml(o.piid || '') + '</a>'
                     : escapeHtml(o.piid || '');
@@ -571,22 +922,103 @@
                     '<td><span class="' + statusCls + '">' + escapeHtml(o.status || '') + '</span></td>' +
                 '</tr>';
             }).join('');
-            body = '<table><thead><tr>' +
-                    '<th>PIID</th><th>Contractor</th><th>Ceiling</th><th>Obligated</th><th>PoP End</th><th>Status</th>' +
-                '</tr></thead><tbody>' + rows + '</tbody></table>';
+            body = '<table><thead><tr><th>PIID</th><th>Contractor</th><th>Ceiling</th><th>Obligated</th><th>PoP End</th><th>Status</th></tr></thead><tbody>' + rows + '</tbody></table>';
         }
-
         const meta = 'Showing top ' + orders.length + ' live order' + (orders.length === 1 ? '' : 's') +
                      ' by ceiling &middot; ' + totalOrders.toLocaleString() + ' total order' +
-                     (totalOrders === 1 ? '' : 's') + ' on this vehicle, ' +
-                     activeOrders.toLocaleString() + ' currently in force.';
-
+                     (totalOrders === 1 ? '' : 's') + ', ' + activeOrders.toLocaleString() + ' currently in force.';
         const content = '<div class="orders-popover">' +
             '<h3>Orders on ' + escapeHtml(v.parent_piid || '') + '</h3>' +
             '<div class="orders-meta">' + meta + '</div>' +
             body +
         '</div>';
         createModal({ content });
+    }
+
+    // ------------------------------------------------------------------
+    // GROUPING METHODS tab
+    // ------------------------------------------------------------------
+    const METHOD_DESCRIPTIONS = {
+        solicitation:   'Groups IDV siblings that share a <b>solicitation_identifier</b>. Strongest signal — cleanest source is the USASpending solicitation ID field on each IDV master record.',
+        shared_ceiling: 'Same <b>awarding office</b> + same <b>vehicle_ceiling</b> (≥ $25M) + overlapping PoP. Catches MATOCs where each sibling redundantly carries the full pool value on its own record.',
+        piid_block:     'Same <b>awarding office</b> + same alpha PIID prefix + identical (start, end) dates, with 2+ members. Catches sibling IDVs numbered sequentially when solicitation_id and shared_ceiling miss.',
+        singleton:      'Anything that didn’t cluster with another vehicle. Family-of-one; kept so the Families tab covers every vehicle.',
+    };
+
+    function renderGroupingAudit(audit) {
+        const container = document.getElementById('groupingContent');
+        const methodOrder = ['solicitation', 'shared_ceiling', 'piid_block', 'singleton'];
+        const totals = audit.totals || {};
+
+        let html = '<div class="stats-row" style="margin-bottom: 1.25rem;">' +
+            '<div class="stat-card"><h3>Total Families</h3><div class="stat-value">' + (totals.families || 0).toLocaleString() + '</div></div>' +
+            '<div class="stat-card"><h3>Vehicles Covered</h3><div class="stat-value">' + (totals.vehicles || 0).toLocaleString() + '</div></div>' +
+            '<div class="stat-card"><h3>Σ Family Ceiling</h3><div class="stat-value">' + fmtDollarsShort(totals.total_family_ceiling) + '</div></div>' +
+            '<div class="stat-card"><h3>Σ Family Obligated</h3><div class="stat-value">' + fmtDollarsShort(totals.total_family_obligated) + '</div></div>' +
+            '</div>';
+
+        for (const m of methodOrder) {
+            const entry = (audit.methods || {})[m];
+            if (!entry) continue;
+            html += '<div class="method-card">' +
+                '<h3>' + methodBadge(m) + ' &nbsp;' + m + '</h3>' +
+                '<div class="method-meta">' + METHOD_DESCRIPTIONS[m] + '</div>' +
+                '<div style="display:flex; flex-wrap:wrap; gap:1.5rem; margin-bottom:0.75rem; font-size:0.9rem;">' +
+                    '<div><strong>' + entry.family_count.toLocaleString() + '</strong> families</div>' +
+                    '<div><strong>' + entry.vehicle_count.toLocaleString() + '</strong> vehicles covered</div>' +
+                    '<div>median members: <strong>' + entry.median_members + '</strong></div>' +
+                    '<div>max members: <strong>' + entry.max_members.toLocaleString() + '</strong></div>' +
+                    '<div>Σ ceiling: <strong>' + fmtDollarsShort(entry.total_ceiling) + '</strong></div>' +
+                    '<div>Σ obligated: <strong>' + fmtDollarsShort(entry.total_obligated) + '</strong></div>' +
+                '</div>';
+            if (entry.examples && entry.examples.length) {
+                html += '<table><thead><tr><th>Members</th><th>Description</th><th>Office</th><th>Ceiling</th><th>Contractors</th><th>Member PIIDs</th></tr></thead><tbody>';
+                for (const ex of entry.examples) {
+                    const warQ = (ex.contractors || []).slice(0, 3).join(' ');
+                    const warUrl = 'https://www.war.gov/DesktopModules/ArticleCS/Search.aspx?sitename=Contracts&q=' + encodeURIComponent(warQ);
+                    const solLink = ex.primary_solicitation
+                        ? ' <a href="https://sam.gov/search/?keywords=' + encodeURIComponent(ex.primary_solicitation) + '&index=opp" target="_blank" rel="noopener" title="Open on SAM.gov">[sol]</a>'
+                        : '';
+                    html += '<tr>' +
+                        '<td class="num">' + ex.member_count.toLocaleString() + '</td>' +
+                        '<td>' + escapeHtml((ex.description || '').slice(0, 180)) + solLink +
+                              ' <a href="' + warUrl + '" target="_blank" rel="noopener" title="Spot-check awardees on war.gov">[war.gov]</a></td>' +
+                        '<td>' + escapeHtml(ex.awarding_office || '') + '<br><small style="color:var(--color-text-muted)">' + escapeHtml(ex.sub_agency || '') + '</small></td>' +
+                        '<td class="num">' + fmtDollarsShort(ex.family_ceiling) + '</td>' +
+                        '<td>' + escapeHtml((ex.contractors || []).slice(0, 5).join(', ')) + ((ex.contractors || []).length > 5 ? '…' : '') + '</td>' +
+                        '<td class="piid-list">' + escapeHtml((ex.member_piids || []).join(', ')) + '</td>' +
+                    '</tr>';
+                }
+                html += '</tbody></table>';
+            } else if (m !== 'singleton') {
+                html += '<div class="empty" style="color:var(--color-text-muted); font-style:italic;">No families matched this method on the current run.</div>';
+            }
+            html += '</div>';
+        }
+        container.innerHTML = html;
+    }
+
+    // ------------------------------------------------------------------
+    // Init
+    // ------------------------------------------------------------------
+    async function init() {
+        // Tab clicks
+        document.querySelectorAll('.tab-link').forEach(a => {
+            a.addEventListener('click', (e) => { e.preventDefault(); activateTab(a.dataset.tab); });
+        });
+
+        const [summary, vehicles, families, audit] = await Promise.all([
+            fetch(DATA_BASE + '/summary.json').then(r => r.json()),
+            fetch(DATA_BASE + '/vehicles.json').then(r => r.json()),
+            fetch(DATA_BASE + '/families.json').then(r => r.json()).catch(() => []),
+            fetch(DATA_BASE + '/grouping_audit.json').then(r => r.json()).catch(() => ({ methods: {}, totals: {} })),
+        ]);
+
+        document.getElementById('asOf').textContent = summary.as_of || '';
+
+        initFamiliesTab(families);
+        initVehiclesTab(vehicles);
+        renderGroupingAudit(audit);
     }
 
     $(document).ready(init);

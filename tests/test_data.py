@@ -26,6 +26,16 @@ def vehicles():
 
 
 @pytest.fixture(scope="module")
+def families():
+    return json.loads((DATA_DIR / "families.json").read_text())
+
+
+@pytest.fixture(scope="module")
+def grouping_audit():
+    return json.loads((DATA_DIR / "grouping_audit.json").read_text())
+
+
+@pytest.fixture(scope="module")
 def filters():
     return json.loads((DATA_DIR / "filters.json").read_text())
 
@@ -47,7 +57,8 @@ def config_yaml():
 SUMMARY_FIELDS = {
     "total_contracts", "active_contracts", "expiring_soon",
     "total_ceiling_b", "total_obligated_b", "ceiling_remaining_b",
-    "unique_contractors", "unique_vehicles", "unique_offices", "as_of",
+    "unique_contractors", "unique_vehicles", "unique_families",
+    "unique_offices", "as_of",
 }
 
 
@@ -207,3 +218,86 @@ def test_summary_vehicles_alignment(summary, vehicles):
     # unique_vehicles in summary should equal len(vehicles) (both in-force by construction)
     assert summary["unique_vehicles"] == len(vehicles), \
         f"summary.unique_vehicles ({summary['unique_vehicles']}) != len(vehicles.json) ({len(vehicles)})"
+
+
+# -----------------------------------------------------------------------------
+# families.json
+# -----------------------------------------------------------------------------
+
+VALID_METHODS = {"solicitation", "shared_ceiling", "piid_block", "singleton"}
+
+
+def test_families_nonempty(families):
+    assert len(families) > 1000, f"only {len(families)} families -- grouping probably broken"
+
+
+def test_every_family_has_id_and_method(families):
+    bad = [f for f in families if not f.get("family_id") or f.get("family_method") not in VALID_METHODS]
+    assert not bad, f"{len(bad)} families with bad id or method (first: {bad[0] if bad else None})"
+
+
+def test_every_vehicle_has_family_annotation(vehicles):
+    bad = [v for v in vehicles if not v.get("family_id") or v.get("family_method") not in VALID_METHODS]
+    assert not bad, f"{len(bad)} vehicles missing family_id/family_method"
+
+
+def test_family_member_coverage_matches_vehicles(vehicles, families):
+    # Every vehicle should map to exactly one family; union of member_piids
+    # across all families should equal set of vehicle parent_piids.
+    fam_piids = set()
+    for f in families:
+        for p in f.get("member_piids", []):
+            fam_piids.add(p)
+    veh_piids = {v["parent_piid"] for v in vehicles if v.get("parent_piid")}
+    missing = veh_piids - fam_piids
+    extra = fam_piids - veh_piids
+    assert not missing, f"{len(missing)} vehicles not in any family (first: {next(iter(missing))})"
+    assert not extra, f"{len(extra)} family members not in vehicles.json (first: {next(iter(extra))})"
+
+
+def test_no_insane_family_ceiling(families):
+    # SHIELD is $151B; next biggest real DoD pool is ~$200B class. $500B is
+    # the absolute guardrail -- anything larger would mean sibling ceilings
+    # got summed instead of max'd.
+    bad = [f for f in families if (f.get("family_ceiling") or 0) > 500_000_000_000]
+    assert not bad, \
+        f"{len(bad)} families with ceiling > $500B (first: {bad[0]['family_id']} @ ${bad[0]['family_ceiling']:,.0f})"
+
+
+def test_family_ceiling_arithmetic(families):
+    for f in families:
+        fc = f.get("family_ceiling") or 0
+        to = f.get("total_obligated") or 0
+        cr = f.get("ceiling_remaining") or 0
+        assert abs(cr - (fc - to)) <= 1, \
+            f"family {f['family_id']}: remaining={cr}, ceiling-obligated={fc-to}"
+
+
+def test_family_member_count_matches(families):
+    for f in families:
+        assert f["member_count"] == len(f.get("member_piids", [])), \
+            f"family {f['family_id']}: member_count {f['member_count']} != len(member_piids) {len(f.get('member_piids', []))}"
+
+
+def test_heuristic_families_are_multi_award(families):
+    # After the multi-award gate, every shared_ceiling or piid_block family
+    # must have at least one member flagged multi-award.
+    for f in families:
+        if f["family_method"] in ("shared_ceiling", "piid_block"):
+            assert f.get("multi_award"), \
+                f"family {f['family_id']} ({f['family_method']}) has no multi-award members -- gate failed"
+
+
+# -----------------------------------------------------------------------------
+# grouping_audit.json
+# -----------------------------------------------------------------------------
+
+def test_audit_has_all_methods(grouping_audit):
+    methods = set((grouping_audit.get("methods") or {}).keys())
+    assert VALID_METHODS.issubset(methods), f"audit missing methods: {VALID_METHODS - methods}"
+
+
+def test_audit_covers_every_vehicle(grouping_audit, vehicles):
+    covered = sum(m["vehicle_count"] for m in grouping_audit["methods"].values())
+    assert covered == len(vehicles), \
+        f"audit vehicle_count sum ({covered}) != vehicles.json length ({len(vehicles)})"
