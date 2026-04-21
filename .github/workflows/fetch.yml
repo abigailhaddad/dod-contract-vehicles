@@ -116,6 +116,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: [build]
+    # Runs whenever build succeeded, including build_only=true runs where
+    # fetch was skipped. Without this, test auto-skips because the upstream
+    # chain includes a skipped job.
+    if: ${{ always() && needs.build.result == 'success' }}
 
     env:
       CF_R2_ACCOUNT_ID: ${{ secrets.CF_R2_ACCOUNT_ID }}
@@ -148,6 +152,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: [test]
+    if: ${{ always() && needs.test.result == 'success' }}
 
     env:
       CF_R2_ACCOUNT_ID: ${{ secrets.CF_R2_ACCOUNT_ID }}
