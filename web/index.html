@@ -44,6 +44,7 @@
             max-width: none;
             outline: none;
         }
+        .muted-cell { color: var(--color-text-muted); font-style: italic; font-size: 0.82rem; }
         .status-active { color: var(--color-accent); font-weight: 600; }
         .status-expiring { color: var(--color-highlight); font-weight: 600; }
         .status-expired { color: var(--color-error); font-weight: 600; }
@@ -173,7 +174,12 @@
 
         <!-- =================== FAMILIES TAB =================== -->
         <div id="tab-families" class="tab-pane active">
-            <div id="familiesToolbar" class="toolbar-row"></div>
+            <div id="familiesToolbar" class="toolbar-row">
+                <label style="font-size: 0.875rem; display: flex; align-items: center; gap: 0.4rem; margin-right: 0.75rem;">
+                    <input type="checkbox" id="hideSingletonsToggle" checked>
+                    Hide singleton families (one vehicle, no siblings)
+                </label>
+            </div>
             <div class="filters-bar-container">
                 <div class="filters-bar" id="familiesFiltersBar">
                     <span class="filters-bar-empty">No filters applied</span>
@@ -329,6 +335,21 @@
         if (abs >= 1e6) return '$' + (n / 1e6).toFixed(1) + 'M';
         if (abs >= 1e3) return '$' + Math.round(n / 1e3) + 'K';
         return '$' + Math.round(n).toLocaleString();
+    }
+
+    // Ceiling fields show "not published" instead of "$0" / "--" when the
+    // value is missing. USASpending often doesn't carry a pool ceiling on
+    // multi-award IDVs; SAM.gov often has it only as free text in the
+    // solicitation description. The tooltip points users there.
+    function fmtCeilingCell(n) {
+        if (n == null || n === 0) {
+            return '<span class="muted-cell" title="No ceiling published in USASpending. Check the SAM.gov solicitation description for a stated value.">not published</span>';
+        }
+        return fmtDollarsShort(n);
+    }
+    function fmtPctCell(p) {
+        if (p == null || isNaN(p)) return '<span class="muted-cell">--</span>';
+        return (Math.round(p * 10) / 10) + '%';
     }
 
     function statusRender(s) {
@@ -535,15 +556,20 @@
             clientSide: true,
             data: allFamilies,
             onFilterChange: function () {
-                const filtered = famFilterManager.getFilteredData();
-                updateFamilyStats(filtered);
-                updateFamilyCharts(filtered);
+                // Use visible-rows from the DataTable (respects hide-singletons toggle)
+                if (!window.familiesDT) return;
+                const visible = window.familiesDT.rows({ search: 'applied' }).data().toArray();
+                updateFamilyStats(visible);
+                updateFamilyCharts(visible);
             },
         });
 
         $.fn.dataTable.ext.search.push(function (settings, searchData, dataIndex, rowData) {
             if (settings.nTable.id !== 'familiesTable') return true;
             if (!famFilterManager) return true;
+            // Hide-singletons toggle (default on): drop rows where family_method == 'singleton'.
+            const hideSingletons = document.getElementById('hideSingletonsToggle');
+            if (hideSingletons && hideSingletons.checked && rowData.family_method === 'singleton') return false;
             return famFilterManager._rowMatches(rowData);
         });
 
@@ -565,7 +591,10 @@
                         const full = (row.member_piids || []).join(', ');
                         const descHtml = d ? '<div>' + escapeHtml(d.slice(0, 120)) + (d.length > 120 ? '…' : '') + '</div>' : '';
                         const piidHtml = '<a class="piid-link" data-famid="' + escapeHtml(row.family_id) + '" title="' + escapeHtml(full) + '">' + escapeHtml(piids) + '</a>';
-                        return descHtml + piidHtml;
+                        const solHtml = row.primary_solicitation
+                            ? ' <a href="https://sam.gov/search/?keywords=' + encodeURIComponent(row.primary_solicitation) + '&index=opp" target="_blank" rel="noopener" title="Open solicitation on SAM.gov" style="font-size:0.75rem; color:var(--color-text-muted); text-decoration:underline;">[sam]</a>'
+                            : '';
+                        return descHtml + piidHtml + solHtml;
                     },
                 },
                 { data: 'sub_agency', defaultContent: '', render: (d, t) => t === 'display' ? escapeHtml(d || '') : (d || '') },
@@ -593,12 +622,15 @@
                     },
                 },
                 { data: 'latest_end', defaultContent: '' },
-                { data: 'family_ceiling', className: 'dt-right', render: (d, t) => t === 'display' ? fmtDollarsShort(d) : (d || 0) },
+                { data: 'family_ceiling', className: 'dt-right',
+                  render: (d, t, row) => t === 'display' ? fmtCeilingCell(d) : (d || 0) },
                 { data: 'total_obligated', className: 'dt-right', render: (d, t) => t === 'display' ? fmtDollarsShort(d) : (d || 0) },
-                { data: 'ceiling_remaining', className: 'dt-right', render: (d, t) => t === 'display' ? fmtDollarsShort(d) : (d || 0) },
+                { data: 'ceiling_remaining', className: 'dt-right',
+                  render: (d, t, row) => t === 'display'
+                      ? ((row.family_ceiling == null || row.family_ceiling === 0) ? fmtCeilingCell(null) : fmtDollarsShort(d))
+                      : (d || 0) },
                 { data: 'pct_ceiling_used', className: 'dt-right',
-                  render: (d, t) => { if (t !== 'display') return d == null ? 0 : d;
-                                      return d == null ? '--' : (Math.round(d * 10) / 10) + '%'; } },
+                  render: (d, t) => t === 'display' ? fmtPctCell(d) : (d == null ? 0 : d) },
             ],
             pageLength: 25,
             lengthMenu: [10, 25, 50, 100, 250],
@@ -633,7 +665,19 @@
             if (fam) showFamilyDrilldown(fam);
         });
 
-        const initial = famFilterManager.getFilteredData();
+        // Wire the hide-singletons toggle to redraw the table on change.
+        const hideToggle = document.getElementById('hideSingletonsToggle');
+        if (hideToggle) {
+            hideToggle.addEventListener('change', () => {
+                window.familiesDT.draw();
+                // Update stats/charts to reflect the visible rows after toggle
+                const visible = window.familiesDT.rows({ search: 'applied' }).data().toArray();
+                updateFamilyStats(visible);
+                updateFamilyCharts(visible);
+            });
+        }
+
+        const initial = window.familiesDT.rows({ search: 'applied' }).data().toArray();
         updateFamilyStats(initial);
         updateFamilyCharts(initial);
     }
@@ -846,12 +890,15 @@
                       return '<span class="list-cell" tabindex="0" title="' + escapeHtml(d.join(', ')) + '">' + escapeHtml(preview) + '</span>';
                   } },
                 { data: 'latest_end', defaultContent: '' },
-                { data: 'total_ceiling', className: 'dt-right', render: (d, t) => t === 'display' ? fmtDollarsShort(d) : (d || 0) },
+                { data: 'total_ceiling', className: 'dt-right',
+                  render: (d, t) => t === 'display' ? fmtCeilingCell(d) : (d || 0) },
                 { data: 'total_obligated', className: 'dt-right', render: (d, t) => t === 'display' ? fmtDollarsShort(d) : (d || 0) },
-                { data: 'ceiling_remaining', className: 'dt-right', render: (d, t) => t === 'display' ? fmtDollarsShort(d) : (d || 0) },
+                { data: 'ceiling_remaining', className: 'dt-right',
+                  render: (d, t, row) => t === 'display'
+                      ? ((row.total_ceiling == null || row.total_ceiling === 0) ? fmtCeilingCell(null) : fmtDollarsShort(d))
+                      : (d || 0) },
                 { data: 'pct_ceiling_used', className: 'dt-right',
-                  render: (d, t) => { if (t !== 'display') return d == null ? 0 : d;
-                                      return d == null ? '--' : (Math.round(d * 10) / 10) + '%'; } },
+                  render: (d, t) => t === 'display' ? fmtPctCell(d) : (d == null ? 0 : d) },
                 { data: 'states', orderable: false,
                   render: (d, t) => {
                       if (t !== 'display') return Array.isArray(d) ? d.join(' ') : (d || '');
@@ -939,18 +986,39 @@
     // GROUPING METHODS tab
     // ------------------------------------------------------------------
     const METHOD_DESCRIPTIONS = {
-        solicitation:   'Groups IDV siblings that share a <b>solicitation_identifier</b>. Strongest signal — cleanest source is the USASpending solicitation ID field on each IDV master record.',
-        shared_ceiling: 'Same <b>awarding office</b> + same <b>vehicle_ceiling</b> (≥ $25M) + overlapping PoP. Catches MATOCs where each sibling redundantly carries the full pool value on its own record.',
-        piid_block:     'Same <b>awarding office</b> + same alpha PIID prefix + identical (start, end) dates, with 2+ members. Catches sibling IDVs numbered sequentially when solicitation_id and shared_ceiling miss.',
-        singleton:      'Anything that didn’t cluster with another vehicle. Family-of-one; kept so the Families tab covers every vehicle.',
+        solicitation:   'Groups IDV siblings that share a <b>solicitation_identifier</b>. Strongest signal — USASpending\'s bulk CSV carries the solicitation ID on each IDV master record, and it matches what the gov\'t uses to identify a single procurement.',
+        shared_ceiling: '<em>Fallback / safety-net method.</em> Same <b>awarding office</b> + same <b>vehicle_ceiling</b> (≥ $25M) + overlapping PoP + ≥2 distinct contractors. Designed to catch MATOCs where solicitation_id is missing. In practice the solicitation method has been reliable enough that this one rarely fires — but it stays in place as defense in depth.',
+        piid_block:     '<em>Fallback / safety-net method.</em> Same <b>awarding office</b> + same alpha PIID prefix + identical (start, end) dates + ≥2 distinct contractors. Catches sibling IDVs numbered sequentially when both solicitation_id and vehicle_ceiling are missing. Rarely needed in practice.',
+        singleton:      'Anything that didn\'t cluster with another vehicle. Family-of-one; kept so the Families tab covers every vehicle. ~94% of DoD vehicles are naturally single-awardee and end up here.',
     };
 
     function renderGroupingAudit(audit) {
         const container = document.getElementById('groupingContent');
         const methodOrder = ['solicitation', 'shared_ceiling', 'piid_block', 'singleton'];
         const totals = audit.totals || {};
+        const methods = audit.methods || {};
 
-        let html = '<div class="stats-row" style="margin-bottom: 1.25rem;">' +
+        // Headline: which method did the real work?
+        const realWork = methodOrder
+            .filter(m => m !== 'singleton' && (methods[m]?.family_count || 0) > 0)
+            .map(m => methods[m]);
+        const inactive = methodOrder
+            .filter(m => m !== 'singleton' && (methods[m]?.family_count || 0) === 0);
+        const realMembers = realWork.reduce((s, e) => s + e.vehicle_count, 0);
+        const realFams = realWork.reduce((s, e) => s + e.family_count, 0);
+        const bannerHtml = '<div class="method-card" style="background: var(--color-accent-subtle, #EFF7F2); border-color: var(--color-accent);">' +
+            '<h3 style="margin-bottom:0.5rem;">How grouping actually worked in this build</h3>' +
+            '<p style="margin:0; font-size:0.92rem;">' +
+              (realFams
+                ? '<b>' + realFams.toLocaleString() + '</b> multi-member families covering <b>' + realMembers.toLocaleString() + '</b> vehicles were found — all via the <b>solicitation</b> method. '
+                : 'No multi-member families were formed in this build. ') +
+              (inactive.length
+                ? 'The fallback methods (' + inactive.join(', ') + ') produced no hits and stayed inactive. That\'s working as intended: solicitation_id coverage on DoD IDVs was high enough that the safety nets weren\'t needed.'
+                : '') +
+            '</p></div>';
+
+        let html = bannerHtml;
+        html += '<div class="stats-row" style="margin-bottom: 1.25rem;">' +
             '<div class="stat-card"><h3>Total Families</h3><div class="stat-value">' + (totals.families || 0).toLocaleString() + '</div></div>' +
             '<div class="stat-card"><h3>Vehicles Covered</h3><div class="stat-value">' + (totals.vehicles || 0).toLocaleString() + '</div></div>' +
             '<div class="stat-card"><h3>Σ Family Ceiling</h3><div class="stat-value">' + fmtDollarsShort(totals.total_family_ceiling) + '</div></div>' +
