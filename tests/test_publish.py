@@ -95,9 +95,15 @@ def test_bulk_payloads_are_not_in_the_publish_set(publish_set):
 
 def test_web_data_is_gitignored():
     """The mechanism that keeps the big payloads out of the deployment."""
+    # Probe a path INSIDE the directory, not the directory itself. The ignore
+    # pattern is "web/data/", which matches directories only, and git decides
+    # whether a path is a directory by looking at the working tree. On a fresh
+    # CI checkout the directory does not exist -- it is built by the pipeline --
+    # so "web/data" matches nothing and this passed locally while failing in CI.
+    # A path under it matches the pattern whether or not anything is on disk.
     # check-ignore exits 0 when the path IS ignored, 1 when it is not.
     rc = subprocess.run(
-        ["git", "check-ignore", "-q", "web/data"], capture_output=True,
+        ["git", "check-ignore", "-q", "web/data/summary.json"], capture_output=True,
     ).returncode
     assert rc == 0, "web/data is no longer gitignored -- its payloads would be deployed"
 
