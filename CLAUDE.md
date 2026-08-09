@@ -80,9 +80,43 @@ Uses DataTables + Bootstrap 5 (CDN).
 fetch_awards.py        -- USASpending bulk download (DoD, all columns)
 enrich_sam.py          -- SAM.gov entity enrichment (contractor details)
 build_dashboard.py     -- Aggregate + build dashboard JSONs
+web/                   -- PUBLISH DIRECTORY (the whole website, ~126 KB)
 web/index.html         -- Dashboard (DataTables)
-web/data/*.json        -- Dashboard data (committed for Vercel)
+web/404.html           -- Pages has no default 404; without this every
+                          unmatched path serves index.html with HTTP 200
+web/_redirects         -- Cloudflare Pages redirects (path-only matching)
+web/data/*.json        -- Local build output. GITIGNORED and NOT deployed;
+                          the browser reads these from R2 in production.
 data/                  -- Raw data (gitignored)
-.env                   -- SAM_API_KEY (gitignored)
-vercel.json            -- Routes / -> web/
+.env                   -- R2 credentials (gitignored)
+vercel.json            -- outputDirectory: web (interim, pre-migration)
+.vercelignore          -- Vercel ignores .gitignore; keep this a superset
 ```
+
+## Deployment
+
+Static site, hosted on Cloudflare Pages.
+
+- **Publish directory: `web/`.** Nothing outside `web/` is served.
+- **Build command: none.** It is plain static files.
+- **Production branch: `prod`** (the pipeline fast-forwards it to `main`
+  only after the data tests pass).
+
+Two hard constraints:
+
+1. **Cloudflare Pages rejects any single file over 25 MiB (26,214,400 bytes).**
+   `vehicles.json` (~80 MB) and `families.json` (~40 MB) are far over. They
+   are never deployed -- `web/data/` is gitignored and the browser fetches
+   the payloads from the public R2 bucket instead
+   (`DATA_BASE` in `web/index.html`). Keep it that way.
+2. **`_redirects` matches on PATH ONLY.** Cloudflare Pages silently ignores
+   any rule whose source is an absolute URL (`https://host/*`). Don't write one.
+
+`tests/test_publish.py` enforces both, plus the publish scope. It runs on
+every push via `.github/workflows/publish-check.yml`.
+
+Historical note: the original `vercel.json` had only a `rewrites` key and no
+`outputDirectory`, so Vercel published the **repository root**. Every pipeline
+script (`build_dashboard.py`, `r2_sync.py`, ...), `config.yaml`, `CLAUDE.md`
+and the CI workflow were publicly readable over HTTP. Secrets were not exposed
+(`.env` is gitignored and was never deployed), but do not let this regress.

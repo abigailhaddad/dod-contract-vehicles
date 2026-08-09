@@ -1,0 +1,13 @@
+# Cloudflare Pages redirects. Consumed at deploy time; not served as a file.
+#
+# Cloudflare Pages matches these on PATH ONLY. A rule whose source is an
+# absolute URL (https://host/*) is silently ignored -- do not add one.
+#
+# The old Vercel config had a catch-all rewrite  /(.*) -> /web/$1  purely
+# because Vercel was publishing the repository ROOT while the site lives in
+# web/. Now that web/ IS the publish directory, that rewrite has no
+# equivalent and is not needed: /methodology.html resolves directly.
+#
+# The only carry-over is legacy /web/... URLs, which the old deployment
+# served with a 200 (e.g. /web/index.html). Point them at the real paths.
+/web/* /:splat 301

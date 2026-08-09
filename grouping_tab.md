@@ -1,0 +1,689 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]: This is experimental — please do not rely on this.
+  - generic [ref=e3]:
+    - banner [ref=e4]:
+      - heading "Defense Contract Vehicles" [level=1] [ref=e5]
+      - paragraph [ref=e6]: Parent IDIQs, BPAs, GWACs, and FSS schedules — with multi-award MATOC siblings grouped into families so shared ceilings don't double-count.
+      - navigation [ref=e7]:
+        - text: Families Vehicles Grouping Methods
+        - link "Methodology" [ref=e8] [cursor=pointer]:
+          - /url: methodology.html
+    - generic [ref=e9]:
+      - generic [ref=e10]:
+        - generic [ref=e11]:
+          - checkbox "Hide singleton families (one vehicle, no siblings)" [checked] [ref=e12]
+          - text: Hide singleton families (one vehicle, no siblings)
+        - button "Download CSV" [ref=e46] [cursor=pointer]
+      - generic [ref=e14]:
+        - generic [ref=e15]: No filters applied
+        - button "+ Add Filter" [ref=e47] [cursor=pointer]
+      - generic [ref=e16]:
+        - generic [ref=e17]:
+          - heading "Active Families" [level=3] [ref=e18]
+          - generic [ref=e19]: 2,453
+        - generic [ref=e20]:
+          - heading "Sibling Vehicles" [level=3] [ref=e21]
+          - generic [ref=e22]: 21,056
+        - generic [ref=e23]:
+          - heading "Total Ceiling" [level=3] [ref=e24]
+          - generic [ref=e25]: $2.0T
+        - generic [ref=e26]:
+          - heading "Ceiling Remaining" [level=3] [ref=e27]
+          - generic [ref=e28]: $1.8T
+        - generic [ref=e29]:
+          - heading "Unique Contractors" [level=3] [ref=e30]
+          - generic [ref=e31]: 6,777
+      - generic [ref=e33]:
+        - heading "Top sub-agencies (by family count)" [level=3] [ref=e35]
+        - generic [ref=e37]:
+          - heading "Family size distribution" [level=3] [ref=e38]
+          - text: How many sibling IDVs in each family
+      - generic [ref=e49]:
+        - generic [ref=e50]:
+          - generic [ref=e52]:
+            - text: Show
+            - combobox "Show entries" [ref=e53]:
+              - option "10"
+              - option "25" [selected]
+              - option "50"
+              - option "100"
+              - option "250"
+            - text: entries
+          - status [ref=e54]: Showing 1 to 25 of 2,453 families (filtered from 43,821 total)
+          - list [ref=e56]:
+            - listitem [ref=e57]:
+              - link "Previous" [disabled]
+            - listitem [ref=e58]:
+              - link "1" [ref=e59] [cursor=pointer]:
+                - /url: "#"
+            - listitem [ref=e60]:
+              - link "2" [ref=e61] [cursor=pointer]:
+                - /url: "#"
+            - listitem [ref=e62]:
+              - link "3" [ref=e63] [cursor=pointer]:
+                - /url: "#"
+            - listitem [ref=e64]:
+              - link "4" [ref=e65] [cursor=pointer]:
+                - /url: "#"
+            - listitem [ref=e66]:
+              - link "5" [ref=e67] [cursor=pointer]:
+                - /url: "#"
+            - listitem [ref=e68]:
+              - link "…" [disabled]
+            - listitem [ref=e69]:
+              - link "99" [ref=e70] [cursor=pointer]:
+                - /url: "#"
+            - listitem [ref=e71]:
+              - link "Next" [ref=e72] [cursor=pointer]:
+                - /url: "#"
+        - table [ref=e73]:
+          - rowgroup [ref=e74]:
+            - 'row "Status: activate to sort column ascending Method: activate to sort column ascending Description / PIIDs: activate to sort column ascending Sub-Agency: activate to sort column ascending Office: activate to sort column ascending Members: activate to sort column ascending Orders: activate to sort column ascending Contractors: activate to sort column ascending Top Contractors NAICS Latest End: activate to sort column ascending Ceiling: activate to sort column ascending Obligated: activate to sort column ascending Remaining: activate to sort column ascending % Used: activate to sort column ascending" [ref=e75]':
+              - 'columnheader "Status: activate to sort column ascending" [ref=e76] [cursor=pointer]': Status
+              - 'columnheader "Method: activate to sort column ascending" [ref=e77] [cursor=pointer]': Method
+              - 'columnheader "Description / PIIDs: activate to sort column ascending" [ref=e78] [cursor=pointer]': Description / PIIDs
+              - 'columnheader "Sub-Agency: activate to sort column ascending" [ref=e79] [cursor=pointer]': Sub-Agency
+              - 'columnheader "Office: activate to sort column ascending" [ref=e80] [cursor=pointer]': Office
+              - 'columnheader "Members: activate to sort column ascending" [ref=e81] [cursor=pointer]': Members
+              - 'columnheader "Orders: activate to sort column ascending" [ref=e82] [cursor=pointer]': Orders
+              - 'columnheader "Contractors: activate to sort column ascending" [ref=e83] [cursor=pointer]': Contractors
+              - columnheader "Top Contractors" [ref=e84]
+              - columnheader "NAICS" [ref=e85]
+              - 'columnheader "Latest End: activate to sort column ascending" [ref=e86] [cursor=pointer]': Latest End
+              - 'columnheader "Ceiling: activate to sort column ascending" [ref=e87] [cursor=pointer]': Ceiling
+              - 'columnheader "Obligated: activate to sort column ascending" [ref=e88] [cursor=pointer]': Obligated
+              - 'columnheader "Remaining: activate to sort column ascending" [ref=e89] [cursor=pointer]': Remaining
+              - 'columnheader "% Used: activate to sort column ascending" [ref=e90] [cursor=pointer]': "% Used"
+          - rowgroup [ref=e91]:
+            - row "Active solicitation HQ085926DE001, HQ085926DE002, HQ085926DE003, +2103 [sam] Missile Defense Agency MISSILE DEFENSE AGENCY (MDA) 2,106 2,098 2,094 0 BASE DESIGN, LLC, 11 CYBER SERVICES LLC, 1AARDVARK, LLC, +17 more 541715 2035-12-29 $151.0B $1.0M $151.0B 0%" [ref=e92]:
+              - cell "Active" [ref=e93]
+              - cell "solicitation" [ref=e94]:
+                - generic [ref=e95]: solicitation
+              - cell "HQ085926DE001, HQ085926DE002, HQ085926DE003, +2103 [sam]" [ref=e96]:
+                - text: HQ085926DE001, HQ085926DE002, HQ085926DE003, +2103
+                - link "[sam]" [ref=e97] [cursor=pointer]:
+                  - /url: https://sam.gov/search/?keywords=HQ085925RE001&index=opp
+              - cell "Missile Defense Agency" [ref=e98]
+              - cell "MISSILE DEFENSE AGENCY (MDA)" [ref=e99]
+              - cell "2,106" [ref=e100]
+              - cell "2,098" [ref=e101]
+              - cell "2,094" [ref=e102]
+              - cell "0 BASE DESIGN, LLC, 11 CYBER SERVICES LLC, 1AARDVARK, LLC, +17 more" [ref=e103]:
+                - generic "0 BASE DESIGN, LLC | 11 CYBER SERVICES LLC | 1AARDVARK, LLC | 1ST EDGE LLC | 2 CIRCLE, INCORPORATED | 2 TWELVE SOLUTIONS LLC | 202 GROUP LLC | 22ND CENTURY TECHNOLOGIES, INC. | 3 SQUARED TECHNOLOGY GROUP LLC | 3500 SQUARE, LLC | 3G FEDERAL SOLUTIONS LLC | 3G PUEO BUSINESS SOLUTIONS LLC | 3GIMBALS LLC | 3LINKS TECHNOLOGIES, INC. | 3P SOLUTIONS INC | 3S SOLUTIONS LLC | 4M RESEARCH, INC | 532 GROUP LLC | @ORCHARD LLC | A & T SYSTEMS, INC." [ref=e104] [cursor=pointer]: 0 BASE DESIGN, LLC, 11 CYBER SERVICES LLC, 1AARDVARK, LLC, +17 more
+              - cell "541715" [ref=e105]:
+                - generic "541715" [ref=e106] [cursor=pointer]
+              - cell "2035-12-29" [ref=e107]
+              - cell "$151.0B" [ref=e108]
+              - cell "$1.0M" [ref=e109]
+              - cell "$151.0B" [ref=e110]
+              - cell "0%" [ref=e111]
+            - row "Active solicitation SPE4AX21D9407, SPE4AX23D9408, SPE4AX23D9409 [sam] Defense Logistics Agency DLA AVIATION 3 4,346 1 NOBLE SUPPLY & LOGISTICS, LLC 332722 2028-02-01 $100.0B $20.1M $100.0B 0%" [ref=e112]:
+              - cell "Active" [ref=e113]
+              - cell "solicitation" [ref=e114]:
+                - generic [ref=e115]: solicitation
+              - cell "SPE4AX21D9407, SPE4AX23D9408, SPE4AX23D9409 [sam]" [ref=e116]:
+                - text: SPE4AX21D9407, SPE4AX23D9408, SPE4AX23D9409
+                - link "[sam]" [ref=e117] [cursor=pointer]:
+                  - /url: https://sam.gov/search/?keywords=SPE4A520R0150&index=opp
+              - cell "Defense Logistics Agency" [ref=e118]
+              - cell "DLA AVIATION" [ref=e119]
+              - cell "3" [ref=e120]
+              - cell "4,346" [ref=e121]
+              - cell "1" [ref=e122]
+              - cell "NOBLE SUPPLY & LOGISTICS, LLC" [ref=e123]:
+                - generic "NOBLE SUPPLY & LOGISTICS, LLC" [ref=e124] [cursor=pointer]
+              - cell "332722" [ref=e125]:
+                - generic "332722" [ref=e126] [cursor=pointer]
+              - cell "2028-02-01" [ref=e127]
+              - cell "$100.0B" [ref=e128]
+              - cell "$20.1M" [ref=e129]
+              - cell "$100.0B" [ref=e130]
+              - cell "0%" [ref=e131]
+            - row "Active solicitation FA865622DA001, FA865622DA002, FA865622DA003, +52 [sam] Department of the Air Force FA2486 AFTC PZZC (EGLIN) 55 8 55 ACCENTURE FEDERAL SERVICES LLC, AMENTUM TECHNOLOGY, INC., ASES LLC, +17 more 332993 2029-09-29 $92.0B $54.0M $91.9B 0.1%" [ref=e132]:
+              - cell "Active" [ref=e133]
+              - cell "solicitation" [ref=e134]:
+                - generic [ref=e135]: solicitation
+              - cell "FA865622DA001, FA865622DA002, FA865622DA003, +52 [sam]" [ref=e136]:
+                - text: FA865622DA001, FA865622DA002, FA865622DA003, +52
+                - link "[sam]" [ref=e137] [cursor=pointer]:
+                  - /url: https://sam.gov/search/?keywords=FA865622RA002&index=opp
+              - cell "Department of the Air Force" [ref=e138]
+              - cell "FA2486 AFTC PZZC (EGLIN)" [ref=e139]
+              - cell "55" [ref=e140]
+              - cell "8" [ref=e141]
+              - cell "55" [ref=e142]
+              - cell "ACCENTURE FEDERAL SERVICES LLC, AMENTUM TECHNOLOGY, INC., ASES LLC, +17 more" [ref=e143]:
+                - generic "ACCENTURE FEDERAL SERVICES LLC | AMENTUM TECHNOLOGY, INC. | ASES LLC | AVIAN, LLC | BAE SYSTEMS INFORMATION AND ELECTRONIC SYSTEMS INTEGRATION INC. | BAE SYSTEMS TECHNOLOGY SOLUTIONS & SERVICES INC. | BATTELLE MEMORIAL INSTITUTE | BELCAN GOVERNMENT SOLUTIONS, INC. | COASPIRE LLC | COHERENT TECHNICAL SERVICES, INC. | DECIBEL RESEARCH, INC. | DMAERO, LLC | DYNAMIC SYSTEMS AND RESEARCH CORPORATION | ELBITAMERICA, INC. | ELLWOOD NATIONAL FORGE COMPANY | FAAC INCORPORATED | FAXON MACHINING, LLC | FLIGHT TEST & MECHANICAL SOLUTIONS, INC | GENERAL DYNAMICS INFORMATION TECHNOLOGY, INC. | GENERAL DYNAMICS MISSION SYSTEMS, INC." [ref=e144] [cursor=pointer]: ACCENTURE FEDERAL SERVICES LLC, AMENTUM TECHNOLOGY, INC., ASES LLC, +17 more
+              - cell "332993" [ref=e145]:
+                - generic "332993" [ref=e146] [cursor=pointer]
+              - cell "2029-09-29" [ref=e147]
+              - cell "$92.0B" [ref=e148]
+              - cell "$54.0M" [ref=e149]
+              - cell "$91.9B" [ref=e150]
+              - cell "0.1%" [ref=e151]
+            - row "Active solicitation W52P1J19D0044, W52P1J19D0045, W52P1J19D0046, +1 [sam] Department of the Army W6QK ACC-RI 4 11 4 AMENTUM PARSONS LOGISTICS SERVICES LLC, FLUOR INTERCONTINENTAL, INC, KBR SERVICES, LLC, +1 more 561210 2026-10-20 $82.0B $5.4B $76.6B 6.6%" [ref=e152]:
+              - cell "Active" [ref=e153]
+              - cell "solicitation" [ref=e154]:
+                - generic [ref=e155]: solicitation
+              - cell "W52P1J19D0044, W52P1J19D0045, W52P1J19D0046, +1 [sam]" [ref=e156]:
+                - text: W52P1J19D0044, W52P1J19D0045, W52P1J19D0046, +1
+                - link "[sam]" [ref=e157] [cursor=pointer]:
+                  - /url: https://sam.gov/search/?keywords=W52P1J16R0001&index=opp
+              - cell "Department of the Army" [ref=e158]
+              - cell "W6QK ACC-RI" [ref=e159]
+              - cell "4" [ref=e160]
+              - cell "11" [ref=e161]
+              - cell "4" [ref=e162]
+              - cell "AMENTUM PARSONS LOGISTICS SERVICES LLC, FLUOR INTERCONTINENTAL, INC, KBR SERVICES, LLC, +1 more" [ref=e163]:
+                - generic "AMENTUM PARSONS LOGISTICS SERVICES LLC | FLUOR INTERCONTINENTAL, INC | KBR SERVICES, LLC | VECTRUS SYSTEMS LLC" [ref=e164] [cursor=pointer]: AMENTUM PARSONS LOGISTICS SERVICES LLC, FLUOR INTERCONTINENTAL, INC, KBR SERVICES, LLC, +1 more
+              - cell "561210" [ref=e165]:
+                - generic "561210" [ref=e166] [cursor=pointer]
+              - cell "2026-10-20" [ref=e167]
+              - cell "$82.0B" [ref=e168]
+              - cell "$5.4B" [ref=e169]
+              - cell "$76.6B" [ref=e170]
+              - cell "6.6%" [ref=e171]
+            - row "Active solicitation SPE8EJ21D0020, SPE8EJ21D0022, SPE8EJ21D0023, +12 [sam] Defense Logistics Agency DLA TROOP SUPPORT 15 6,332 4 ATLANTIC DIVING SUPPLY, INC., NOBLE SUPPLY & LOGISTICS, LLC, SUPPLYCORE LLC, +1 more 333316, 339999, 423850 2030-05-06 $60.0B $2.5B $57.5B 4.1%" [ref=e172]:
+              - cell "Active" [ref=e173]
+              - cell "solicitation" [ref=e174]:
+                - generic [ref=e175]: solicitation
+              - cell "SPE8EJ21D0020, SPE8EJ21D0022, SPE8EJ21D0023, +12 [sam]" [ref=e176]:
+                - text: SPE8EJ21D0020, SPE8EJ21D0022, SPE8EJ21D0023, +12
+                - link "[sam]" [ref=e177] [cursor=pointer]:
+                  - /url: https://sam.gov/search/?keywords=SPE8EJ18R0001&index=opp
+              - cell "Defense Logistics Agency" [ref=e178]
+              - cell "DLA TROOP SUPPORT" [ref=e179]
+              - cell "15" [ref=e180]
+              - cell "6,332" [ref=e181]
+              - cell "4" [ref=e182]
+              - cell "ATLANTIC DIVING SUPPLY, INC., NOBLE SUPPLY & LOGISTICS, LLC, SUPPLYCORE LLC, +1 more" [ref=e183]:
+                - generic "ATLANTIC DIVING SUPPLY, INC. | NOBLE SUPPLY & LOGISTICS, LLC | SUPPLYCORE LLC | W S DARLEY & CO" [ref=e184] [cursor=pointer]: ATLANTIC DIVING SUPPLY, INC., NOBLE SUPPLY & LOGISTICS, LLC, SUPPLYCORE LLC, +1 more
+              - cell "333316, 339999, 423850" [ref=e185]:
+                - generic "333316, 339999, 423850" [ref=e186] [cursor=pointer]
+              - cell "2030-05-06" [ref=e187]
+              - cell "$60.0B" [ref=e188]
+              - cell "$2.5B" [ref=e189]
+              - cell "$57.5B" [ref=e190]
+              - cell "4.1%" [ref=e191]
+            - row "Active solicitation FA807525D0001, FA807525D0002, FA807525D0003, +12 [sam] Department of the Air Force FA8075 774 ESS 15 0 15 AMERICAN SYSTEMS CORPORATION, BARBARICUM LLC, DCS CORPORATION, +12 more $48.0B -- $48.0B 0%" [ref=e192]:
+              - cell "Active" [ref=e193]
+              - cell "solicitation" [ref=e194]:
+                - generic [ref=e195]: solicitation
+              - cell "FA807525D0001, FA807525D0002, FA807525D0003, +12 [sam]" [ref=e196]:
+                - text: FA807525D0001, FA807525D0002, FA807525D0003, +12
+                - link "[sam]" [ref=e197] [cursor=pointer]:
+                  - /url: https://sam.gov/search/?keywords=FA807523R0001&index=opp
+              - cell "Department of the Air Force" [ref=e198]
+              - cell "FA8075 774 ESS" [ref=e199]
+              - cell "15" [ref=e200]
+              - cell "0" [ref=e201]
+              - cell "15" [ref=e202]
+              - cell "AMERICAN SYSTEMS CORPORATION, BARBARICUM LLC, DCS CORPORATION, +12 more" [ref=e203]:
+                - generic "AMERICAN SYSTEMS CORPORATION | BARBARICUM LLC | DCS CORPORATION | DELTA RESOURCES, INC. | GENERAL DYNAMICS INFORMATION TECHNOLOGY, INC. | JOINT RESEARCH AND DEVELOPMENT LLC | KIHOMAC INC | MODERN TECHNOLOGY SOLUTIONS, INC. | MORSECORP, INC | PARSONS GOVERNMENT SERVICES INC. | PEOPLETEC, INC. | PERATON INC. | SERCO INC | SYSTEMS PLANNING AND ANALYSIS, INC. | TORCH TECHNOLOGIES INC" [ref=e204] [cursor=pointer]: AMERICAN SYSTEMS CORPORATION, BARBARICUM LLC, DCS CORPORATION, +12 more
+              - cell [ref=e205]
+              - cell [ref=e206]
+              - cell "$48.0B" [ref=e207]
+              - cell "--" [ref=e208]
+              - cell "$48.0B" [ref=e209]
+              - cell "0%" [ref=e210]
+            - row "Active solicitation FA865625DB045, FA865625DB046 [sam] Department of the Air Force FA8656 AFLCMC EBX 2 0 2 ULTRA ELECTRONICS ADVANCED TACTICAL SYSTEMS INC, UNMANNED SYSTEMS INCORPORATED $46.0B -- $46.0B 0%" [ref=e211]:
+              - cell "Active" [ref=e212]
+              - cell "solicitation" [ref=e213]:
+                - generic [ref=e214]: solicitation
+              - cell "FA865625DB045, FA865625DB046 [sam]" [ref=e215]:
+                - text: FA865625DB045, FA865625DB046
+                - link "[sam]" [ref=e216] [cursor=pointer]:
+                  - /url: https://sam.gov/search/?keywords=FA865625BR001&index=opp
+              - cell "Department of the Air Force" [ref=e217]
+              - cell "FA8656 AFLCMC EBX" [ref=e218]
+              - cell "2" [ref=e219]
+              - cell "0" [ref=e220]
+              - cell "2" [ref=e221]
+              - cell "ULTRA ELECTRONICS ADVANCED TACTICAL SYSTEMS INC, UNMANNED SYSTEMS INCORPORATED" [ref=e222]:
+                - generic "ULTRA ELECTRONICS ADVANCED TACTICAL SYSTEMS INC | UNMANNED SYSTEMS INCORPORATED" [ref=e223] [cursor=pointer]: ULTRA ELECTRONICS ADVANCED TACTICAL SYSTEMS INC, UNMANNED SYSTEMS INCORPORATED
+              - cell [ref=e224]
+              - cell [ref=e225]
+              - cell "$46.0B" [ref=e226]
+              - cell "--" [ref=e227]
+              - cell "$46.0B" [ref=e228]
+              - cell "0%" [ref=e229]
+            - row "Active solicitation FA865625DB003, FA865625DB004, FA865625DB005, +116 [sam] Department of the Air Force FA8656 AFLCMC EBX 119 3 117 A SQUARE GROUP LLC, AEON INDUSTRIAL INC., AEVEX AEROSPACE, LLC, +17 more 332993 2028-09-10 $46.0B $8.2M $46.0B 0%" [ref=e230]:
+              - cell "Active" [ref=e231]
+              - cell "solicitation" [ref=e232]:
+                - generic [ref=e233]: solicitation
+              - cell "FA865625DB003, FA865625DB004, FA865625DB005, +116 [sam]" [ref=e234]:
+                - text: FA865625DB003, FA865625DB004, FA865625DB005, +116
+                - link "[sam]" [ref=e235] [cursor=pointer]:
+                  - /url: https://sam.gov/search/?keywords=FA865625RB001&index=opp
+              - cell "Department of the Air Force" [ref=e236]
+              - cell "FA8656 AFLCMC EBX" [ref=e237]
+              - cell "119" [ref=e238]
+              - cell "3" [ref=e239]
+              - cell "117" [ref=e240]
+              - cell "A SQUARE GROUP LLC, AEON INDUSTRIAL INC., AEVEX AEROSPACE, LLC, +17 more" [ref=e241]:
+                - generic "A SQUARE GROUP LLC | AEON INDUSTRIAL INC. | AEVEX AEROSPACE, LLC | AGING AIRCRAFT CONSULTING LLC | AMPERSAND SOLUTIONS GROUP INC | APOGEE ENGINEERING, LLC | APOGEE WORX, LLC | ARC SPACE INNOVATION LLC | ARCHARITHMS INC | ARCTOS TECHNOLOGY SOLUTIONS, LLC | ASTRION GROUP, LLC | ATEC INC | ATLANTIC DIVING SUPPLY, INC. | AVIATION & MISSILE SOLUTIONS, LLC | BAXTER AEROSPACE INC. | BAY ENGINEERING & TECHNOLOGIES INC | BLUEHALO LLC | BOECORE, LLC | BRAINSTORM TECHNOLOGIES LLC | CAHABA FEDERAL SOLUTIONS, LLC" [ref=e242] [cursor=pointer]: A SQUARE GROUP LLC, AEON INDUSTRIAL INC., AEVEX AEROSPACE, LLC, +17 more
+              - cell "332993" [ref=e243]:
+                - generic "332993" [ref=e244] [cursor=pointer]
+              - cell "2028-09-10" [ref=e245]
+              - cell "$46.0B" [ref=e246]
+              - cell "$8.2M" [ref=e247]
+              - cell "$46.0B" [ref=e248]
+              - cell "0%" [ref=e249]
+            - row "Active solicitation FA865621DA003, FA865621DA004, FA865621DA005, +51 [sam] Defense Contract Management Agency DCMA SOUTHERN CALIFORNIA 54 38 54 ACCURATE MACHINE & TOOL CORP, AEROJET ROCKETDYNE INC, AGR, LLC, +17 more 332993 2029-12-31 $47.0B $2.3B $44.7B 5%" [ref=e250]:
+              - cell "Active" [ref=e251]
+              - cell "solicitation" [ref=e252]:
+                - generic [ref=e253]: solicitation
+              - cell "FA865621DA003, FA865621DA004, FA865621DA005, +51 [sam]" [ref=e254]:
+                - text: FA865621DA003, FA865621DA004, FA865621DA005, +51
+                - link "[sam]" [ref=e255] [cursor=pointer]:
+                  - /url: https://sam.gov/search/?keywords=FA865621R0095&index=opp
+              - cell "Defense Contract Management Agency" [ref=e256]
+              - cell "DCMA SOUTHERN CALIFORNIA" [ref=e257]
+              - cell "54" [ref=e258]
+              - cell "38" [ref=e259]
+              - cell "54" [ref=e260]
+              - cell "ACCURATE MACHINE & TOOL CORP, AEROJET ROCKETDYNE INC, AGR, LLC, +17 more" [ref=e261]:
+                - generic "ACCURATE MACHINE & TOOL CORP | AEROJET ROCKETDYNE INC | AGR, LLC | ANALEX CORPORATION | APPLIED RESEARCH ASSOCIATES, INC. | APPLIED RESEARCH SOLUTIONS, INC. | AUTONODYNE LLC | BAE SYSTEMS SPACE & MISSION SYSTEMS INC. | BLUE FORCE TECHNOLOGIES, LLC | BOOZ ALLEN HAMILTON INC | CFD RESEARCH CORPORATION | CINTEL INC | CORVID TECHNOLOGIES, LLC | CUMMINGS AEROSPACE, INC. | CYBERSPACE SOLUTIONS LLC | DCS CORPORATION | DEFENSE WARRIORS GOVERNMENT SOLUTIONS LLC | DYNETICS, INC. | EPISYS SCIENCE INC | GENERAL ATOMICS" [ref=e262] [cursor=pointer]: ACCURATE MACHINE & TOOL CORP, AEROJET ROCKETDYNE INC, AGR, LLC, +17 more
+              - cell "332993" [ref=e263]:
+                - generic "332993" [ref=e264] [cursor=pointer]
+              - cell "2029-12-31" [ref=e265]
+              - cell "$47.0B" [ref=e266]
+              - cell "$2.3B" [ref=e267]
+              - cell "$44.7B" [ref=e268]
+              - cell "5%" [ref=e269]
+            - row "Active solicitation HT001525D9012, HT001525D9013, HT001525D9014, +17 [sam] Defense Health Agency DEFENSE HEALTH AGENCY 20 44 20 A TO Z INTEGRATED SOLUTIONS, LLC., ACMESOLV, LLC, AIMS-USGP JV LLC, +17 more 621111 2027-01-18 $43.0B $50.7M $42.9B 0.1%" [ref=e270]:
+              - cell "Active" [ref=e271]
+              - cell "solicitation" [ref=e272]:
+                - generic [ref=e273]: solicitation
+              - cell "HT001525D9012, HT001525D9013, HT001525D9014, +17 [sam]" [ref=e274]:
+                - text: HT001525D9012, HT001525D9013, HT001525D9014, +17
+                - link "[sam]" [ref=e275] [cursor=pointer]:
+                  - /url: https://sam.gov/search/?keywords=HT001523R0003&index=opp
+              - cell "Defense Health Agency" [ref=e276]
+              - cell "DEFENSE HEALTH AGENCY" [ref=e277]
+              - cell "20" [ref=e278]
+              - cell "44" [ref=e279]
+              - cell "20" [ref=e280]
+              - cell "A TO Z INTEGRATED SOLUTIONS, LLC., ACMESOLV, LLC, AIMS-USGP JV LLC, +17 more" [ref=e281]:
+                - generic "A TO Z INTEGRATED SOLUTIONS, LLC. | ACMESOLV, LLC | AIMS-USGP JV LLC | AMG AND GIACARE JV, LLC | APC INGENESIS HEALTHCARE STAFFING, LLC | ARISE STAFFING JV LLC | ASPIRE-LUKE JV LLC | BMC HEALTHCARE SOLUTIONS JV, LLC | CENTRALCARE, INCORPORATED | COGNITO LLC | COHO FEDERAL SOLUTIONS JV LLC | COMPASS ARORA JV LLC | GLOBAL DYNAMICS LLC | MAGNOLIA GOVERNMENT SOLUTIONS LLC | NORTH AMERICAN UNITED HEALTHCARE SERVICES JV LLC | ONEERP SOLUTIONS LLC | PDQ HEALTH SERVICES, LLC | PRIME PHYSICIANS PLLC | SERVEFED GMS JV, LLC | TRYFACTA INC" [ref=e282] [cursor=pointer]: A TO Z INTEGRATED SOLUTIONS, LLC., ACMESOLV, LLC, AIMS-USGP JV LLC, +17 more
+              - cell "621111" [ref=e283]:
+                - generic "621111" [ref=e284] [cursor=pointer]
+              - cell "2027-01-18" [ref=e285]
+              - cell "$43.0B" [ref=e286]
+              - cell "$50.7M" [ref=e287]
+              - cell "$42.9B" [ref=e288]
+              - cell "0.1%" [ref=e289]
+            - row "Active solicitation HT001524D9000, HT001524D9001, HT001524D9002, +8 [sam] Defense Health Agency DEFENSE HEALTH AGENCY 11 28 11 DECYPHER HEALTH SERVICES, LLC, DILLIGAS CORP, FEDERAL STAFFING RESOURCES, LLC, +8 more 621111 2029-06-17 $43.0B $124.6M $42.9B 0.3%" [ref=e290]:
+              - cell "Active" [ref=e291]
+              - cell "solicitation" [ref=e292]:
+                - generic [ref=e293]: solicitation
+              - cell "HT001524D9000, HT001524D9001, HT001524D9002, +8 [sam]" [ref=e294]:
+                - text: HT001524D9000, HT001524D9001, HT001524D9002, +8
+                - link "[sam]" [ref=e295] [cursor=pointer]:
+                  - /url: https://sam.gov/search/?keywords=HT001523R0004&index=opp
+              - cell "Defense Health Agency" [ref=e296]
+              - cell "DEFENSE HEALTH AGENCY" [ref=e297]
+              - cell "11" [ref=e298]
+              - cell "28" [ref=e299]
+              - cell "11" [ref=e300]
+              - cell "DECYPHER HEALTH SERVICES, LLC, DILLIGAS CORP, FEDERAL STAFFING RESOURCES, LLC, +8 more" [ref=e301]:
+                - generic "DECYPHER HEALTH SERVICES, LLC | DILLIGAS CORP | FEDERAL STAFFING RESOURCES, LLC | KBR WYLE SERVICES, LLC | LOYAL SOURCE GOVERNMENT SERVICES LLC | LUKE & ASSOCIATES, INC. | MATRIX PROVIDERS INC. | OPTUMSERVE HEALTH SERVICES, INC. | SPECTRUM HEALTHCARE RESOURCES, INC | THE ARORA GROUP, INC. | VESA HEALTH & TECHNOLOGY INC" [ref=e302] [cursor=pointer]: DECYPHER HEALTH SERVICES, LLC, DILLIGAS CORP, FEDERAL STAFFING RESOURCES, LLC, +8 more
+              - cell "621111" [ref=e303]:
+                - generic "621111" [ref=e304] [cursor=pointer]
+              - cell "2029-06-17" [ref=e305]
+              - cell "$43.0B" [ref=e306]
+              - cell "$124.6M" [ref=e307]
+              - cell "$42.9B" [ref=e308]
+              - cell "0.3%" [ref=e309]
+            - row "Active solicitation FA807518D0001, FA807518D0002, FA807518D0003, +25 [sam] Department of the Air Force FA8075 774 ESS 28 209 24 ADAMS COMMUNICATION & ENGINEERING TECHNOLOGY, INC., AGILE INNOVATIVE SOLUTIONS JOINT VENTURE, AMENTUM SERVICES, INC., +17 more 541715 2030-09-30 $48.0B $9.1B $38.9B 18.9%" [ref=e310]:
+              - cell "Active" [ref=e311]
+              - cell "solicitation" [ref=e312]:
+                - generic [ref=e313]: solicitation
+              - cell "FA807518D0001, FA807518D0002, FA807518D0003, +25 [sam]" [ref=e314]:
+                - text: FA807518D0001, FA807518D0002, FA807518D0003, +25
+                - link "[sam]" [ref=e315] [cursor=pointer]:
+                  - /url: https://sam.gov/search/?keywords=FA807517R0001&index=opp
+              - cell "Department of the Air Force" [ref=e316]
+              - cell "FA8075 774 ESS" [ref=e317]
+              - cell "28" [ref=e318]
+              - cell "209" [ref=e319]
+              - cell "24" [ref=e320]
+              - cell "ADAMS COMMUNICATION & ENGINEERING TECHNOLOGY, INC., AGILE INNOVATIVE SOLUTIONS JOINT VENTURE, AMENTUM SERVICES, INC., +17 more" [ref=e321]:
+                - generic "ADAMS COMMUNICATION & ENGINEERING TECHNOLOGY, INC. | AGILE INNOVATIVE SOLUTIONS JOINT VENTURE | AMENTUM SERVICES, INC. | BAE SYSTEMS TECHNOLOGY SOLUTIONS & SERVICES INC. | BARBARICUM LLC | BATTELLE MEMORIAL INSTITUTE | BOOZ ALLEN HAMILTON INC | BRTRC FEDERAL SOLUTIONS, INC. | CACI, INC. - FEDERAL | DATA SYSTEMS ANALYSTS INC | DELTA CONSTELLATION GROUP, LLC | GEORGIA TECH APPLIED RESEARCH CORP | HII MISSION TECHNOLOGIES CORP | KBR WYLE SERVICES, LLC | LEIDOS, INC. | MANTECH TSG-2 JOINT VENTURE | MRIGLOBAL | NAVAL SYSTEMS, INC. | RAYTHEON COMPANY | SCIENCE APPLICATIONS INTERNATIONAL CORPORATION" [ref=e322] [cursor=pointer]: ADAMS COMMUNICATION & ENGINEERING TECHNOLOGY, INC., AGILE INNOVATIVE SOLUTIONS JOINT VENTURE, AMENTUM SERVICES, INC., +17 more
+              - cell "541715" [ref=e323]:
+                - generic "541715" [ref=e324] [cursor=pointer]
+              - cell "2030-09-30" [ref=e325]
+              - cell "$48.0B" [ref=e326]
+              - cell "$9.1B" [ref=e327]
+              - cell "$38.9B" [ref=e328]
+              - cell "18.9%" [ref=e329]
+            - row "Active solicitation SPE4AX16D9473, SPE4AX17D9409, SPE4AX20D9403 [sam] Defense Logistics Agency DLA AVIATION 3 97 2 DERCO AEROSPACE, INC., LOCKHEED MARTIN CORPORATION 336413 2027-11-15 $35.0B $8.3M $35.0B 0%" [ref=e330]:
+              - cell "Active" [ref=e331]
+              - cell "solicitation" [ref=e332]:
+                - generic [ref=e333]: solicitation
+              - cell "SPE4AX16D9473, SPE4AX17D9409, SPE4AX20D9403 [sam]" [ref=e334]:
+                - text: SPE4AX16D9473, SPE4AX17D9409, SPE4AX20D9403
+                - link "[sam]" [ref=e335] [cursor=pointer]:
+                  - /url: https://sam.gov/search/?keywords=SPE4AX16R0025&index=opp
+              - cell "Defense Logistics Agency" [ref=e336]
+              - cell "DLA AVIATION" [ref=e337]
+              - cell "3" [ref=e338]
+              - cell "97" [ref=e339]
+              - cell "2" [ref=e340]
+              - cell "DERCO AEROSPACE, INC., LOCKHEED MARTIN CORPORATION" [ref=e341]:
+                - generic "DERCO AEROSPACE, INC. | LOCKHEED MARTIN CORPORATION" [ref=e342] [cursor=pointer]: DERCO AEROSPACE, INC., LOCKHEED MARTIN CORPORATION
+              - cell "336413" [ref=e343]:
+                - generic "336413" [ref=e344] [cursor=pointer]
+              - cell "2027-11-15" [ref=e345]
+              - cell "$35.0B" [ref=e346]
+              - cell "$8.3M" [ref=e347]
+              - cell "$35.0B" [ref=e348]
+              - cell "0%" [ref=e349]
+            - row "Active solicitation W15P7T17D0100, W15P7T17D0101, W15P7T17D0102, +155 [sam] Department of the Air Force 0410 AQ HQ CONTRACT 158 159 158 22ND CENTURY TECHNOLOGIES, INC., ABACUS TECHNOLOGY CORPORATION, ABSOLUTE BUSINESS SOLUTIONS, INC., +17 more 541712, 541715 2031-01-31 $37.4B $4.3B $33.1B 11.5%" [ref=e350]:
+              - cell "Active" [ref=e351]
+              - cell "solicitation" [ref=e352]:
+                - generic [ref=e353]: solicitation
+              - cell "W15P7T17D0100, W15P7T17D0101, W15P7T17D0102, +155 [sam]" [ref=e354]:
+                - text: W15P7T17D0100, W15P7T17D0101, W15P7T17D0102, +155
+                - link "[sam]" [ref=e355] [cursor=pointer]:
+                  - /url: https://sam.gov/search/?keywords=W15P7T15R0008&index=opp
+              - cell "Department of the Air Force" [ref=e356]
+              - cell "0410 AQ HQ CONTRACT" [ref=e357]
+              - cell "158" [ref=e358]
+              - cell "159" [ref=e359]
+              - cell "158" [ref=e360]
+              - cell "22ND CENTURY TECHNOLOGIES, INC., ABACUS TECHNOLOGY CORPORATION, ABSOLUTE BUSINESS SOLUTIONS, INC., +17 more" [ref=e361]:
+                - generic "22ND CENTURY TECHNOLOGIES, INC. | ABACUS TECHNOLOGY CORPORATION | ABSOLUTE BUSINESS SOLUTIONS, INC. | ACCENTURE FEDERAL SERVICES LLC | ADAMS COMMUNICATION & ENGINEERING TECHNOLOGY, INC. | ADDX CORPORATION | ADVANCED SYSTEMS DEVELOPMENT INC | ADVANCED TECHNOLOGY SYSTEMS COMPANY, INC. (OF VIRGINIA) | AGILE DEFENSE, LLC | ALTAMIRA TECHNOLOGIES CORP | AMENTUM SERVICES, INC. | AMENTUM TECHNOLOGY, INC. | AMERICAN ELECTRONIC WARFARE ASSOCIATES, INCORPORATED | ANAVATION, LLC | ARANEA SOLUTIONS INC | ARCTIC SLOPE TECHNICAL SERVICES, INC. | AUGUSTINE CONSULTING INC | BARBARICUM LLC | BATTELLE MEMORIAL INSTITUTE | BELCAN GOVERNMENT SOLUTIONS, INC." [ref=e362] [cursor=pointer]: 22ND CENTURY TECHNOLOGIES, INC., ABACUS TECHNOLOGY CORPORATION, ABSOLUTE BUSINESS SOLUTIONS, INC., +17 more
+              - cell "541712, 541715" [ref=e363]:
+                - generic "541712, 541715" [ref=e364] [cursor=pointer]
+              - cell "2031-01-31" [ref=e365]
+              - cell "$37.4B" [ref=e366]
+              - cell "$4.3B" [ref=e367]
+              - cell "$33.1B" [ref=e368]
+              - cell "11.5%" [ref=e369]
+            - row "Active solicitation FA862123DB003, FA862123DB004, FA862123DB005, +34 [sam] Defense Contract Management Agency DCMA MID-ATLANTIC 37 8 36 AERO SIMULATION, INC., AERO XR SOLUTIONS LLC, AEROSPACE TRAINING SYSTEMS PARTNERS JOINT VENTURE, LLP, +17 more 336413 2033-03-31 $32.5B $162.3M $32.3B 0.5%" [ref=e370]:
+              - cell "Active" [ref=e371]
+              - cell "solicitation" [ref=e372]:
+                - generic [ref=e373]: solicitation
+              - cell "FA862123DB003, FA862123DB004, FA862123DB005, +34 [sam]" [ref=e374]:
+                - text: FA862123DB003, FA862123DB004, FA862123DB005, +34
+                - link "[sam]" [ref=e375] [cursor=pointer]:
+                  - /url: https://sam.gov/search/?keywords=FA862121R0030&index=opp
+              - cell "Defense Contract Management Agency" [ref=e376]
+              - cell "DCMA MID-ATLANTIC" [ref=e377]
+              - cell "37" [ref=e378]
+              - cell "8" [ref=e379]
+              - cell "36" [ref=e380]
+              - cell "AERO SIMULATION, INC., AERO XR SOLUTIONS LLC, AEROSPACE TRAINING SYSTEMS PARTNERS JOINT VENTURE, LLP, +17 more" [ref=e381]:
+                - generic "AERO SIMULATION, INC. | AERO XR SOLUTIONS LLC | AEROSPACE TRAINING SYSTEMS PARTNERS JOINT VENTURE, LLP | AMERICAN SYSTEMS CORPORATION | AVIATION TRAINING CONSULTING, LLC | AZURE TRAINING SYSTEMS JV, LLC | BOOZ ALLEN HAMILTON INC | BY LIGHT PROFESSIONAL IT SERVICES LLC | CACI, INC. - FEDERAL | CAE USA INC. | CRAIG TECHNICAL CONSULTING INC | CTE II JV, LLC | CYMSTAR LLC | DELAWARE RESOURCE GROUP OF OKLAHOMA LLC | FALCONRY TRAINING SOLUTIONS JV | FIDELITY TECHNOLOGY SERVICES, LLC | FLIGHTSAFETY DEFENSE CORPORATION | GENERAL DYNAMICS INFORMATION TECHNOLOGY, INC. | HII MISSION TECHNOLOGIES CORP | INNOVATIVE TRAINING SOLUTIONS, LLC" [ref=e382] [cursor=pointer]: AERO SIMULATION, INC., AERO XR SOLUTIONS LLC, AEROSPACE TRAINING SYSTEMS PARTNERS JOINT VENTURE, LLP, +17 more
+              - cell "336413" [ref=e383]:
+                - generic "336413" [ref=e384] [cursor=pointer]
+              - cell "2033-03-31" [ref=e385]
+              - cell "$32.5B" [ref=e386]
+              - cell "$162.3M" [ref=e387]
+              - cell "$32.3B" [ref=e388]
+              - cell "0.5%" [ref=e389]
+            - row "Active solicitation SPE2DX22D0010, SPE2DX22D0019, SPE2DX22D0020, +22 [sam] Defense Logistics Agency DLA TROOP SUPPORT 25 0 1 AMERISOURCEBERGEN DRUG CORP $28.9B -- $28.9B 0%" [ref=e390]:
+              - cell "Active" [ref=e391]
+              - cell "solicitation" [ref=e392]:
+                - generic [ref=e393]: solicitation
+              - cell "SPE2DX22D0010, SPE2DX22D0019, SPE2DX22D0020, +22 [sam]" [ref=e394]:
+                - text: SPE2DX22D0010, SPE2DX22D0019, SPE2DX22D0020, +22
+                - link "[sam]" [ref=e395] [cursor=pointer]:
+                  - /url: https://sam.gov/search/?keywords=SPE2DX20R0001&index=opp
+              - cell "Defense Logistics Agency" [ref=e396]
+              - cell "DLA TROOP SUPPORT" [ref=e397]
+              - cell "25" [ref=e398]
+              - cell "0" [ref=e399]
+              - cell "1" [ref=e400]
+              - cell "AMERISOURCEBERGEN DRUG CORP" [ref=e401]:
+                - generic "AMERISOURCEBERGEN DRUG CORP" [ref=e402] [cursor=pointer]
+              - cell [ref=e403]
+              - cell [ref=e404]
+              - cell "$28.9B" [ref=e405]
+              - cell "--" [ref=e406]
+              - cell "$28.9B" [ref=e407]
+              - cell "0%" [ref=e408]
+            - row "Active solicitation SPE2DR25D1002, SPE2DR25D1004, SPE2DR25D1006, +701 [sam] Defense Logistics Agency DLA TROOP SUPPORT 704 0 3 AMERISOURCEBERGEN DRUG CORP, CARDINAL HEALTH, INC., DMS PHARMACEUTICAL GROUP INC $26.4B -- $26.4B 0%" [ref=e409]:
+              - cell "Active" [ref=e410]
+              - cell "solicitation" [ref=e411]:
+                - generic [ref=e412]: solicitation
+              - cell "SPE2DR25D1002, SPE2DR25D1004, SPE2DR25D1006, +701 [sam]" [ref=e413]:
+                - text: SPE2DR25D1002, SPE2DR25D1004, SPE2DR25D1006, +701
+                - link "[sam]" [ref=e414] [cursor=pointer]:
+                  - /url: https://sam.gov/search/?keywords=SPE2DX24R0001&index=opp
+              - cell "Defense Logistics Agency" [ref=e415]
+              - cell "DLA TROOP SUPPORT" [ref=e416]
+              - cell "704" [ref=e417]
+              - cell "0" [ref=e418]
+              - cell "3" [ref=e419]
+              - cell "AMERISOURCEBERGEN DRUG CORP, CARDINAL HEALTH, INC., DMS PHARMACEUTICAL GROUP INC" [ref=e420]:
+                - generic "AMERISOURCEBERGEN DRUG CORP | CARDINAL HEALTH, INC. | DMS PHARMACEUTICAL GROUP INC" [ref=e421] [cursor=pointer]: AMERISOURCEBERGEN DRUG CORP, CARDINAL HEALTH, INC., DMS PHARMACEUTICAL GROUP INC
+              - cell [ref=e422]
+              - cell [ref=e423]
+              - cell "$26.4B" [ref=e424]
+              - cell "--" [ref=e425]
+              - cell "$26.4B" [ref=e426]
+              - cell "0%" [ref=e427]
+            - row "Active solicitation HQ072726DE003, HQ072726DE004, HQ072726DE005, +7 [sam] Defense Microelectronics Activity DEFENSE MICROELECTRONICS ACTIVITY 10 0 10 BATTELLE MEMORIAL INSTITUTE, DRS NETWORK & IMAGING SYSTEMS LLC, GENERAL DYNAMICS MISSION SYSTEMS, INC., +7 more $25.4B -- $25.4B 0%" [ref=e428]:
+              - cell "Active" [ref=e429]
+              - cell "solicitation" [ref=e430]:
+                - generic [ref=e431]: solicitation
+              - cell "HQ072726DE003, HQ072726DE004, HQ072726DE005, +7 [sam]" [ref=e432]:
+                - text: HQ072726DE003, HQ072726DE004, HQ072726DE005, +7
+                - link "[sam]" [ref=e433] [cursor=pointer]:
+                  - /url: https://sam.gov/search/?keywords=HQ072725RE001&index=opp
+              - cell "Defense Microelectronics Activity" [ref=e434]
+              - cell "DEFENSE MICROELECTRONICS ACTIVITY" [ref=e435]
+              - cell "10" [ref=e436]
+              - cell "0" [ref=e437]
+              - cell "10" [ref=e438]
+              - cell "BATTELLE MEMORIAL INSTITUTE, DRS NETWORK & IMAGING SYSTEMS LLC, GENERAL DYNAMICS MISSION SYSTEMS, INC., +7 more" [ref=e439]:
+                - generic "BATTELLE MEMORIAL INSTITUTE | DRS NETWORK & IMAGING SYSTEMS LLC | GENERAL DYNAMICS MISSION SYSTEMS, INC. | HII MISSION TECHNOLOGIES CORP | L3HARRIS TECHNOLOGIES, INC. | LEIDOS, INC. | NORTHROP GRUMMAN SYSTEMS CORPORATION | RAYTHEON COMPANY | THE CHARLES STARK DRAPER LABORATORY, INC. | VERTEX AEROSPACE LLC" [ref=e440] [cursor=pointer]: BATTELLE MEMORIAL INSTITUTE, DRS NETWORK & IMAGING SYSTEMS LLC, GENERAL DYNAMICS MISSION SYSTEMS, INC., +7 more
+              - cell [ref=e441]
+              - cell [ref=e442]
+              - cell "$25.4B" [ref=e443]
+              - cell "--" [ref=e444]
+              - cell "$25.4B" [ref=e445]
+              - cell "0%" [ref=e446]
+            - row "Active solicitation N0002325D0001, N0002325D0002, N0002325D0003, +85 [sam] Department of the Army 0409 AQ HQ CONTRACT 88 37 88 4 MARINE SERVICES LLC, 4H4 MANAGEMENT GMBH, ACCIONA CONSTRUCTION AUSTRALIA PTY LTD, +17 more 541614 2026-12-19 $22.9B $287.9M $22.6B 1.3%" [ref=e447]:
+              - cell "Active" [ref=e448]
+              - cell "solicitation" [ref=e449]:
+                - generic [ref=e450]: solicitation
+              - cell "N0002325D0001, N0002325D0002, N0002325D0003, +85 [sam]" [ref=e451]:
+                - text: N0002325D0001, N0002325D0002, N0002325D0003, +85
+                - link "[sam]" [ref=e452] [cursor=pointer]:
+                  - /url: https://sam.gov/search/?keywords=N0002324R0001&index=opp
+              - cell "Department of the Army" [ref=e453]
+              - cell "0409 AQ HQ CONTRACT" [ref=e454]
+              - cell "88" [ref=e455]
+              - cell "37" [ref=e456]
+              - cell "88" [ref=e457]
+              - cell "4 MARINE SERVICES LLC, 4H4 MANAGEMENT GMBH, ACCIONA CONSTRUCTION AUSTRALIA PTY LTD, +17 more" [ref=e458]:
+                - generic "4 MARINE SERVICES LLC | 4H4 MANAGEMENT GMBH | ACCIONA CONSTRUCTION AUSTRALIA PTY LTD | ACQUISITION LOGISTICS LLC | AFRICAN CONTRACT SOLUTIONS INC | AGUDAM LLC | AHNTECH INC | AL JAZY TRADING COMPANY | AMENTUM SERVICES, INC. | AMERICAN ROLL-ON ROLL-OFF CARRIER GROUP, INC | AMSTABILITY, LLC | ANGLICOTECH, LLC | ATLANTIC DIVING SUPPLY, INC. | BODWE-KVG JV LLC | BROMGROVE LIMITED | CENTERRA GROUP, LLC | COMPETDAC SRL | CROWLEY GOVERNMENT SERVICES, INC. | CULMEN INTERNATIONAL, LLC | DA DEFENSE LOGISTICS HQ, LLC" [ref=e459] [cursor=pointer]: 4 MARINE SERVICES LLC, 4H4 MANAGEMENT GMBH, ACCIONA CONSTRUCTION AUSTRALIA PTY LTD, +17 more
+              - cell "541614" [ref=e460]:
+                - generic "541614" [ref=e461] [cursor=pointer]
+              - cell "2026-12-19" [ref=e462]
+              - cell "$22.9B" [ref=e463]
+              - cell "$287.9M" [ref=e464]
+              - cell "$22.6B" [ref=e465]
+              - cell "1.3%" [ref=e466]
+            - row "Active solicitation N0002325D0091, N0002325D0092, N0002325D0093, +63 [sam] Department of the Navy NAVAL SUPPLY SYSTEMS COMMAND 66 0 66 701C LLC, ACTIVE DEPLOYMENT SYSTEMS, LLC, ACUITY INTERNATIONAL, LLC, +17 more $20.0B -- $20.0B 0%" [ref=e467]:
+              - cell "Active" [ref=e468]
+              - cell "solicitation" [ref=e469]:
+                - generic [ref=e470]: solicitation
+              - cell "N0002325D0091, N0002325D0092, N0002325D0093, +63 [sam]" [ref=e471]:
+                - text: N0002325D0091, N0002325D0092, N0002325D0093, +63
+                - link "[sam]" [ref=e472] [cursor=pointer]:
+                  - /url: https://sam.gov/search/?keywords=N0002325R0001&index=opp
+              - cell "Department of the Navy" [ref=e473]
+              - cell "NAVAL SUPPLY SYSTEMS COMMAND" [ref=e474]
+              - cell "66" [ref=e475]
+              - cell "0" [ref=e476]
+              - cell "66" [ref=e477]
+              - cell "701C LLC, ACTIVE DEPLOYMENT SYSTEMS, LLC, ACUITY INTERNATIONAL, LLC, +17 more" [ref=e478]:
+                - generic "701C LLC | ACTIVE DEPLOYMENT SYSTEMS, LLC | ACUITY INTERNATIONAL, LLC | ANOVAEON LLC | ASPEN MEDICAL USA INC | ASPETTO INC | ASSET PROTECTION & SECURITY SERVICES, L.P. | ATCO FRONTEC USA INC. | BEACHVIEW LOGISTICS US, INC. | BIG JET, LLC | BLUEWATER MANAGEMENT GROUP LLC | CFK SERVICES , LLC | CHEROKEE NATION GOVERNMENT SOLUTIONS LLC | CONTINUITY GLOBAL SOLUTIONS LLC | CORECIVIC, INC. | COTTON COMMERCIAL USA, INC. | CRISIS RESPONSE CO LLC | CRITICAL CONTINGENCY SOLUTIONS LLC | DISASTER MANAGEMENT GROUP, LLC | DKW COMMUNICATIONS INC" [ref=e479] [cursor=pointer]: 701C LLC, ACTIVE DEPLOYMENT SYSTEMS, LLC, ACUITY INTERNATIONAL, LLC, +17 more
+              - cell [ref=e480]
+              - cell [ref=e481]
+              - cell "$20.0B" [ref=e482]
+              - cell "--" [ref=e483]
+              - cell "$20.0B" [ref=e484]
+              - cell "0%" [ref=e485]
+            - row "Active solicitation HTC71120DR044, HTC71122DR002 [sam] USTRANSCOM USTRANSCOM-AQ 2 0 2 AMERICAN ROLL-ON ROLL-OFF CARRIER GROUP, INC, HOMESAFE ALLIANCE LLC $18.9B -- $18.9B 0%" [ref=e486]:
+              - cell "Active" [ref=e487]
+              - cell "solicitation" [ref=e488]:
+                - generic [ref=e489]: solicitation
+              - cell "HTC71120DR044, HTC71122DR002 [sam]" [ref=e490]:
+                - text: HTC71120DR044, HTC71122DR002
+                - link "[sam]" [ref=e491] [cursor=pointer]:
+                  - /url: https://sam.gov/search/?keywords=HTC71119RR004&index=opp
+              - cell "USTRANSCOM" [ref=e492]
+              - cell "USTRANSCOM-AQ" [ref=e493]
+              - cell "2" [ref=e494]
+              - cell "0" [ref=e495]
+              - cell "2" [ref=e496]
+              - cell "AMERICAN ROLL-ON ROLL-OFF CARRIER GROUP, INC, HOMESAFE ALLIANCE LLC" [ref=e497]:
+                - generic "AMERICAN ROLL-ON ROLL-OFF CARRIER GROUP, INC | HOMESAFE ALLIANCE LLC" [ref=e498] [cursor=pointer]: AMERICAN ROLL-ON ROLL-OFF CARRIER GROUP, INC, HOMESAFE ALLIANCE LLC
+              - cell [ref=e499]
+              - cell [ref=e500]
+              - cell "$18.9B" [ref=e501]
+              - cell "--" [ref=e502]
+              - cell "$18.9B" [ref=e503]
+              - cell "0%" [ref=e504]
+            - row "Active solicitation W911QY18D0001, W911QY18D0002, W911QY18D0003, +172 [sam] Defense Contract Management Agency DCMA SALT LAKE CITY 175 10 174 4LOC AFFILIATES, 908 DEVICES INC, ADVANCED MEASUREMENT TECHNOLOGY INC, +17 more 541715 2029-10-31 $16.6B $271.5M $16.3B 1.6%" [ref=e505]:
+              - cell "Active" [ref=e506]
+              - cell "solicitation" [ref=e507]:
+                - generic [ref=e508]: solicitation
+              - cell "W911QY18D0001, W911QY18D0002, W911QY18D0003, +172 [sam]" [ref=e509]:
+                - text: W911QY18D0001, W911QY18D0002, W911QY18D0003, +172
+                - link "[sam]" [ref=e510] [cursor=pointer]:
+                  - /url: https://sam.gov/search/?keywords=W911QY17R0010&index=opp
+              - cell "Defense Contract Management Agency" [ref=e511]
+              - cell "DCMA SALT LAKE CITY" [ref=e512]
+              - cell "175" [ref=e513]
+              - cell "10" [ref=e514]
+              - cell "174" [ref=e515]
+              - cell "4LOC AFFILIATES, 908 DEVICES INC, ADVANCED MEASUREMENT TECHNOLOGY INC, +17 more" [ref=e516]:
+                - generic "4LOC AFFILIATES | 908 DEVICES INC | ADVANCED MEASUREMENT TECHNOLOGY INC | ADVANCED TECHNOLOGY SYSTEMS COMPANY, INC. (OF VIRGINIA) | AEROCLAVE LLC | AIRBOSS DEFENSE GROUP LIMITED | ALAKAI DEFENSE SYSTEMS, INC | ALTUS, LLC | AMENTUM SERVICES, INC. | AMERICAN TYPE CULTURE COLLECTION | ANALYTIC SERVICES INC. | ANTHEM ENGINEERING, LLC | APPLIED INTEGRITY CONSULTING, LLC | APPLIED RESEARCH ASSOCIATES, INC. | APTIM FEDERAL SERVICES, LLC | AQUILA, INC. | ARGON ELECTRONICS (UK) LTD. | ARKTIS DETECTION SYSTEMS, INC. | ASYNCHRONY SOLUTIONS, LLC | ATLANTIC DIVING SUPPLY, INC." [ref=e517] [cursor=pointer]: 4LOC AFFILIATES, 908 DEVICES INC, ADVANCED MEASUREMENT TECHNOLOGY INC, +17 more
+              - cell "541715" [ref=e518]:
+                - generic "541715" [ref=e519] [cursor=pointer]
+              - cell "2029-10-31" [ref=e520]
+              - cell "$16.6B" [ref=e521]
+              - cell "$271.5M" [ref=e522]
+              - cell "$16.3B" [ref=e523]
+              - cell "1.6%" [ref=e524]
+            - row "Active solicitation FA300220D0010, FA300220D0011, FA300220D0012, +5 [sam] Department of the Air Force FA2860 316 CONS PK 8 7 6 AKIMA LOGISTICS SERVICES LLC, AMENTUM SERVICES, INC., AMENTUM TECHNOLOGY, INC., +3 more 488190 2027-09-30 $16.9B $1.0B $15.9B 5.9%" [ref=e525]:
+              - cell "Active" [ref=e526]
+              - cell "solicitation" [ref=e527]:
+                - generic [ref=e528]: solicitation
+              - cell "FA300220D0010, FA300220D0011, FA300220D0012, +5 [sam]" [ref=e529]:
+                - text: FA300220D0010, FA300220D0011, FA300220D0012, +5
+                - link "[sam]" [ref=e530] [cursor=pointer]:
+                  - /url: https://sam.gov/search/?keywords=FA300219RA001&index=opp
+              - cell "Department of the Air Force" [ref=e531]
+              - cell "FA2860 316 CONS PK" [ref=e532]
+              - cell "8" [ref=e533]
+              - cell "7" [ref=e534]
+              - cell "6" [ref=e535]
+              - cell "AKIMA LOGISTICS SERVICES LLC, AMENTUM SERVICES, INC., AMENTUM TECHNOLOGY, INC., +3 more" [ref=e536]:
+                - generic "AKIMA LOGISTICS SERVICES LLC | AMENTUM SERVICES, INC. | AMENTUM TECHNOLOGY, INC. | LEIDOS, INC. | M1 SUPPORT SERVICES, L.P. | VERTEX AEROSPACE LLC" [ref=e537] [cursor=pointer]: AKIMA LOGISTICS SERVICES LLC, AMENTUM SERVICES, INC., AMENTUM TECHNOLOGY, INC., +3 more
+              - cell "488190" [ref=e538]:
+                - generic "488190" [ref=e539] [cursor=pointer]
+              - cell "2027-09-30" [ref=e540]
+              - cell "$16.9B" [ref=e541]
+              - cell "$1.0B" [ref=e542]
+              - cell "$15.9B" [ref=e543]
+              - cell "5.9%" [ref=e544]
+            - row "Active solicitation FA890325D0056, FA890325D0057, FA890325D0058, +20 [sam] Department of the Air Force FA8903 772 ESS PK 23 8 22 AHTNA USA-CDM JV, ALOHA 'AINA, LLC, BARLOVENTO LLC, +17 more 236220 2026-09-29 $15.0B $24K $15.0B 0%" [ref=e545]:
+              - cell "Active" [ref=e546]
+              - cell "solicitation" [ref=e547]:
+                - generic [ref=e548]: solicitation
+              - cell "FA890325D0056, FA890325D0057, FA890325D0058, +20 [sam]" [ref=e549]:
+                - text: FA890325D0056, FA890325D0057, FA890325D0058, +20
+                - link "[sam]" [ref=e550] [cursor=pointer]:
+                  - /url: https://sam.gov/search/?keywords=FA890324R0023&index=opp
+              - cell "Department of the Air Force" [ref=e551]
+              - cell "FA8903 772 ESS PK" [ref=e552]
+              - cell "23" [ref=e553]
+              - cell "8" [ref=e554]
+              - cell "22" [ref=e555]
+              - cell "AHTNA USA-CDM JV, ALOHA 'AINA, LLC, BARLOVENTO LLC, +17 more" [ref=e556]:
+                - generic "AHTNA USA-CDM JV | ALOHA 'AINA, LLC | BARLOVENTO LLC | BERING-WESTON JV, LLC | CCI GROUP, LLC | CDM CONSTRUCTORS INC. | CMS COLAS CONSTRUCTION LLC | CONTRACK WATTS INC | EXP FEDERAL INC. | FLATIRON DRAGADOS CONSTRUCTORS, INC. | GILBANE FEDERAL JV | GMH-C JV II, LLC | HENSEL PHELPS CONSTRUCTION CO | JACK WAYTE CMS JV | JADE CREEK CONSTRUCTION LLC | MH JV | NORTH WIND GENERAL CONTRACTORS LLC | PARSONS GOVERNMENT SERVICES INC | RELIANCE CONSTRUCTION MANAGEMENT COMPANY | SEA PAC ENGINEERING INC" [ref=e557] [cursor=pointer]: AHTNA USA-CDM JV, ALOHA 'AINA, LLC, BARLOVENTO LLC, +17 more
+              - cell "236220" [ref=e558]:
+                - generic "236220" [ref=e559] [cursor=pointer]
+              - cell "2026-09-29" [ref=e560]
+              - cell "$15.0B" [ref=e561]
+              - cell "$24K" [ref=e562]
+              - cell "$15.0B" [ref=e563]
+              - cell "0%" [ref=e564]
+            - row "Active solicitation N6274225D1339, N6274225D1340, N6274225D1341, +6 [sam] Department of the Navy NAVFACSYSCOM PACIFIC 9 9 9 BL HARBERT INTERNATIONAL LLC, BLACK CONSTRUCTION-TUTOR PERINI JV, CONTI FEDERAL SERVICES, LLC, +6 more 236220 2030-09-09 $15.0B $225K $15.0B 0%" [ref=e565]:
+              - cell "Active" [ref=e566]
+              - cell "solicitation" [ref=e567]:
+                - generic [ref=e568]: solicitation
+              - cell "N6274225D1339, N6274225D1340, N6274225D1341, +6 [sam]" [ref=e569]:
+                - text: N6274225D1339, N6274225D1340, N6274225D1341, +6
+                - link "[sam]" [ref=e570] [cursor=pointer]:
+                  - /url: https://sam.gov/search/?keywords=N6274224R1327&index=opp
+              - cell "Department of the Navy" [ref=e571]
+              - cell "NAVFACSYSCOM PACIFIC" [ref=e572]
+              - cell "9" [ref=e573]
+              - cell "9" [ref=e574]
+              - cell "9" [ref=e575]
+              - cell "BL HARBERT INTERNATIONAL LLC, BLACK CONSTRUCTION-TUTOR PERINI JV, CONTI FEDERAL SERVICES, LLC, +6 more" [ref=e576]:
+                - generic "BL HARBERT INTERNATIONAL LLC | BLACK CONSTRUCTION-TUTOR PERINI JV | CONTI FEDERAL SERVICES, LLC | CORE TECH-HDCC-KAJIMA LLC | ECC EXPEDITIONARY CONSTRUCTORS LLC | GILBANE FEDERAL JV | GRANITE-OBAYASHI 3, A JOINT VENTURE | HENSEL PHELPS CONSTRUCTION CO | NAN INC" [ref=e577] [cursor=pointer]: BL HARBERT INTERNATIONAL LLC, BLACK CONSTRUCTION-TUTOR PERINI JV, CONTI FEDERAL SERVICES, LLC, +6 more
+              - cell "236220" [ref=e578]:
+                - generic "236220" [ref=e579] [cursor=pointer]
+              - cell "2030-09-09" [ref=e580]
+              - cell "$15.0B" [ref=e581]
+              - cell "$225K" [ref=e582]
+              - cell "$15.0B" [ref=e583]
+              - cell "0%" [ref=e584]
+        - generic [ref=e585]:
+          - generic [ref=e587]:
+            - text: Show
+            - combobox "Show entries" [ref=e588]:
+              - option "10"
+              - option "25" [selected]
+              - option "50"
+              - option "100"
+              - option "250"
+            - text: entries
+          - generic [ref=e589]: Showing 1 to 25 of 2,453 families (filtered from 43,821 total)
+          - list [ref=e591]:
+            - listitem [ref=e592]:
+              - link "Previous" [disabled]
+            - listitem [ref=e593]:
+              - link "1" [ref=e594] [cursor=pointer]:
+                - /url: "#"
+            - listitem [ref=e595]:
+              - link "2" [ref=e596] [cursor=pointer]:
+                - /url: "#"
+            - listitem [ref=e597]:
+              - link "3" [ref=e598] [cursor=pointer]:
+                - /url: "#"
+            - listitem [ref=e599]:
+              - link "4" [ref=e600] [cursor=pointer]:
+                - /url: "#"
+            - listitem [ref=e601]:
+              - link "5" [ref=e602] [cursor=pointer]:
+                - /url: "#"
+            - listitem [ref=e603]:
+              - link "…" [disabled]
+            - listitem [ref=e604]:
+              - link "99" [ref=e605] [cursor=pointer]:
+                - /url: "#"
+            - listitem [ref=e606]:
+              - link "Next" [ref=e607] [cursor=pointer]:
+                - /url: "#"
+    - contentinfo [ref=e41]:
+      - paragraph [ref=e42]:
+        - text: Data from
+        - link "USASpending bulk archives" [ref=e43] [cursor=pointer]:
+          - /url: https://www.usaspending.gov/
+        - text: · Spot-check via
+        - link "war.gov/News/Contracts" [ref=e44] [cursor=pointer]:
+          - /url: https://www.war.gov/News/Contracts/
+        - text: · Code on
+        - link "GitHub" [ref=e45] [cursor=pointer]:
+          - /url: https://github.com/abigailhaddad/dod-contract-vehicles
+        - text: · As of 2026-04-21

@@ -1,0 +1,29 @@
+name: Publish scope check
+
+# Guards the Cloudflare Pages deployment: publish directory is web/, nothing
+# but the website is in it, and no published file exceeds the hard 25 MiB
+# per-file limit. Runs on every push/PR because a bad commit is the thing
+# that breaks a deploy -- the weekly data pipeline runs too late to catch it.
+
+on:
+  push:
+    branches: [main, prod]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  publish-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install pytest
+        run: pip install pytest
+
+      - name: Check publish scope and file sizes
+        run: pytest tests/test_publish.py -v

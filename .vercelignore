@@ -1,0 +1,39 @@
+# Vercel reads THIS file and ignores .gitignore entirely. Anything not listed
+# here gets uploaded by `vercel deploy` from a working tree -- which is how
+# .claude/ and other private files have ended up publicly served before.
+# Keep this a SUPERSET of .gitignore.
+#
+# The site is web/ only (vercel.json sets outputDirectory: web). Everything
+# below is build tooling, raw data, or local state and must never ship.
+
+# --- everything from .gitignore ---
+/data/
+web/data/
+.env
+.env.*
+__pycache__/
+*.pyc
+.DS_Store
+.playwright-mcp/
+.venv/
+.pytest_cache/
+test-results/
+.wrangler/
+node_modules/
+
+# --- local/private state ---
+.git/
+.github/
+.claude/
+.vscode/
+.idea/
+
+# --- pipeline source: public on GitHub, but not part of the website ---
+*.py
+tests/
+config.yaml
+requirements.txt
+requirements-test.txt
+
+# --- docs / notes ---
+*.md

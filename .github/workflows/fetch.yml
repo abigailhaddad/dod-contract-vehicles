@@ -182,3 +182,26 @@ jobs:
           git fetch origin main prod || git fetch origin main
           git checkout -B prod origin/main
           git push origin prod --force-with-lease
+
+      # Vercel watched the prod branch and built on push, so publishing needed
+      # no step of its own. Cloudflare Pages is a direct upload, so it does.
+      #
+      # Deploys a staged copy rather than web/ itself. web/data/ is gitignored
+      # build output that this job has just written -- hundreds of megabytes,
+      # with single files far over Cloudflare's 25 MiB per-file limit -- and
+      # wrangler uploads whatever directory it is pointed at, .gitignore or no.
+      # The page fetches that data from R2, not from here, so the published set
+      # is exactly the tracked files under web/.
+      - name: Deploy to Cloudflare Pages
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          STAGE="$(mktemp -d)"
+          git ls-files -co --exclude-standard web | while read -r f; do
+            mkdir -p "$STAGE/$(dirname "${f#web/}")"
+            cp "$f" "$STAGE/${f#web/}"
+          done
+          echo "Publishing:"; find "$STAGE" -type f | sed "s|$STAGE|  |"
+          npx --yes wrangler@4 pages deploy "$STAGE" \
+            --project-name=dod-contract-vehicles --branch=main --commit-dirty=true

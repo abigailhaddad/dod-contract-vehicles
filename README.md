@@ -92,6 +92,25 @@ interrupted and re-run — it picks up where it left off.
 `fetch_awards.py` runs automatically via GitHub Actions. Uses Cloudflare R2
 for checkpoint persistence and auto-chains new runs when IP-blocked.
 
+## Deployment
+
+Static site on Cloudflare Pages.
+
+| Setting | Value |
+|---|---|
+| Publish / build output directory | `web` |
+| Build command | *(none)* |
+| Production branch | `prod` |
+
+The dashboard payloads are **not** part of the deployment. `web/data/*.json`
+is gitignored local build output; in production the browser fetches the data
+cross-origin from a public Cloudflare R2 bucket. That is deliberate:
+`vehicles.json` is ~80 MB and `families.json` ~40 MB, and Cloudflare Pages
+rejects any single file over 25 MiB.
+
+`tests/test_publish.py` fails the build if anything but the website lands in
+`web/`, or if any published file crosses the 25 MiB limit.
+
 ## License
 
 MIT
