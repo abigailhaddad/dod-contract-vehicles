@@ -26,6 +26,7 @@ from pathlib import Path
 import yaml
 
 from build_families import build_families
+import payload as pl
 
 csv.field_size_limit(min(sys.maxsize, 2**31 - 1))
 
@@ -55,6 +56,46 @@ EXPIRING_SOON_CUTOFF  = (TODAY + timedelta(days=EXPIRING_SOON_DAYS)).isoformat()
 
 PARENT_AWARD_TYPE_LABELS = dict(CONFIG["labels"]["parent_award_types"])
 PRICING_LABELS           = dict(CONFIG["labels"]["pricing_types"])
+
+# ---------------------------------------------------------------------------
+# Payload size budget
+# ---------------------------------------------------------------------------
+# Every visitor downloads all of web/data/. R2's public *.r2.dev endpoint
+# serves these with NO content-encoding -- verified by requesting
+# families.json with `Accept-Encoding: gzip, br` and getting back 42,639,945
+# bytes and no content-encoding header -- so the file size IS the wire size.
+#
+# These ceilings are ~40% above the sizes the columnar encoding actually
+# produces (9.2 MB / 5.7 MB as of the FY2022-26 build), which leaves room for
+# the corpus to grow but fails fast if a field the frontend never reads gets
+# re-added to a per-row record, or if indent= comes back.
+PAYLOAD_BUDGET_BYTES = {
+    "vehicles.json": 14 * 1024 * 1024,
+    "families.json":  9 * 1024 * 1024,
+}
+# Everything in web/data/ combined, i.e. what one cold page load costs.
+TOTAL_PAYLOAD_BUDGET_BYTES = 25 * 1024 * 1024
+
+
+def check_payload_budget(data_dir: Path) -> list[tuple[str, int, int]]:
+    """Return [(name, size, budget)] for every payload over its budget.
+
+    Also enforces the combined budget, reported as ("TOTAL", size, budget).
+    """
+    over = []
+    for name, budget in PAYLOAD_BUDGET_BYTES.items():
+        path = data_dir / name
+        if not path.exists():
+            continue
+        size = path.stat().st_size
+        if size > budget:
+            over.append((name, size, budget))
+    total = sum(p.stat().st_size for p in data_dir.glob("*.json"))
+    if total > TOTAL_PAYLOAD_BUDGET_BYTES:
+        over.append(("TOTAL", total, TOTAL_PAYLOAD_BUDGET_BYTES))
+    for name, size, budget in over:
+        print(f"  WARNING: {name} is {size:,} bytes, over its {budget:,}-byte budget")
+    return over
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -789,20 +830,33 @@ def main():
     filters = build_filter_options(contracts)
     config_mirror = build_config_mirror()
 
-    # Write outputs
-    outputs = {
-        "vehicles.json":       vehicles_json,
-        "families.json":       families_json,
+    # Write outputs.
+    #
+    # vehicles.json and families.json are the two files every visitor
+    # downloads, they are served from R2 uncompressed, and they were 127 MB
+    # between them. They go out columnar and dictionary-encoded (payload.py);
+    # the browser decodes them back to row objects in decodeVehicles() /
+    # decodeFamilies(). The rest are a few KB each and stay plain, so
+    # methodology.html and any human reading them need no decoder.
+    encoded = {
+        "vehicles.json": pl.encode_vehicles(vehicles_json),
+        "families.json": pl.encode_families(families_json),
+    }
+    plain = {
         "grouping_audit.json": grouping_audit,
         "summary.json":        summary,
         "filters.json":        filters,
         "config.json":         config_mirror,
     }
 
-    for fname, data in outputs.items():
+    for fname, data in {**encoded, **plain}.items():
         path = WEB_DATA_DIR / fname
-        path.write_text(json.dumps(data, indent=2, default=str))
-        print(f"  Wrote {path}")
+        # No indent: pretty-printing these cost ~30% of the wire size, and
+        # r2.dev serves them with no content-encoding at all.
+        path.write_text(json.dumps(data, separators=(",", ":"), default=str))
+        print(f"  Wrote {path} ({path.stat().st_size:,} bytes)")
+
+    check_payload_budget(WEB_DATA_DIR)
 
     print(f"\nDone. {len(vehicles_json):,} vehicles (summary counts in summary.json).")
     print("Commit web/data/ to deploy.")

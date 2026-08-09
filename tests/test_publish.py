@@ -135,7 +135,8 @@ def test_pipeline_source_lives_outside_the_publish_dir():
     """Regression on the original bug: no outputDirectory meant the repo root
     was the publish root, so these were all live."""
     for name in ("build_dashboard.py", "build_families.py", "fetch_awards.py",
-                 "enrich_sam.py", "r2_sync.py", "config.yaml", "CLAUDE.md"):
+                 "enrich_sam.py", "r2_sync.py", "payload.py", "conftest.py",
+                 "config.yaml", "CLAUDE.md"):
         assert Path(name).exists(), f"{name} moved -- update this test"
         assert not (PUBLISH_DIR / name).exists(), \
             f"{name} is inside the publish directory and would be served publicly"

@@ -37,11 +37,47 @@ active status, builds vehicle-level rollup, outputs dashboard JSONs.
 - Expiring Soon = PoP end within 6 months
 - Ceiling remaining = potential_total_value_of_award - total_dollars_obligated
 - Vehicle rollup groups orders by parent_award_id_piid
-- Output: `web/data/` (contracts.json, vehicles.json, summary.json, filters.json)
+- Output: `web/data/` (vehicles.json, families.json, grouping_audit.json,
+  summary.json, filters.json, config.json)
 
 ```bash
 python3 build_dashboard.py
 ```
+
+### Payload encoding -- `payload.py`
+
+`vehicles.json` and `families.json` are downloaded in full by every visitor,
+from a public R2 endpoint that serves them with **no `content-encoding`**
+(verified: requesting `families.json` with `Accept-Encoding: gzip, br` returns
+42,639,945 bytes and no encoding header). File size is wire size.
+
+They ship columnar + dictionary-encoded, which took the pair from 127 MB to
+14 MB with no change in what the dashboard renders:
+
+| file | before | after |
+|---|---|---|
+| vehicles.json | 84,433,308 | 8,747,926 (9.7x) |
+| families.json | 42,639,945 | 5,280,843 (8.1x) |
+
+Four things paid for the old size: `indent=2`, key names repeated on every
+row, values repeated across rows, and 12 vehicle + 10 family fields that no
+frontend file referenced. `family_id` and each order's USASpending link are
+derived rather than stored; both derivations are checked against the real
+value for every row at encode time and raise if they ever stop holding.
+
+**`decode_vehicles()` / `decode_families()` in `payload.py` and
+`decodeVehicles()` / `decodeFamilies()` in `web/index.html` are mirrors of
+each other -- change them together.** `tests/test_payload.py` compares the two
+key sets and fails if they drift; without it, a field added on one side only
+renders as a blank column rather than an error. Everything downstream of the
+decoders sees plain row objects, so tables, filters, charts, drill-downs and
+CSV export needed no changes.
+
+The other four payloads are a few KB each and stay plain JSON, so
+`methodology.html` (and anyone reading them by hand) needs no decoder.
+
+`PAYLOAD_BUDGET_BYTES` in `build_dashboard.py` caps each file, plus a combined
+cap on `web/data/*.json`. `tests/test_payload.py` enforces it in CI.
 
 ## Dashboard (`web/index.html`)
 
@@ -105,10 +141,18 @@ Static site, hosted on Cloudflare Pages.
 Two hard constraints:
 
 1. **Cloudflare Pages rejects any single file over 25 MiB (26,214,400 bytes).**
-   `vehicles.json` (~80 MB) and `families.json` (~40 MB) are far over. They
-   are never deployed -- `web/data/` is gitignored and the browser fetches
-   the payloads from the public R2 bucket instead
-   (`DATA_BASE` in `web/index.html`). Keep it that way.
+   `web/data/` is gitignored and never deployed; the browser fetches the
+   payloads from the public R2 bucket instead (`DATA_BASE` in
+   `web/index.html`). Keep it that way. The encoded payloads (8.7 MB / 5.3 MB)
+   would now fit under the limit, but serving them from Pages would still be
+   wrong: the pipeline promotes data to R2 on its own schedule, and `web/`
+   holds only tracked files.
+
+   Because of that split, **`web/index.html` and the R2 payloads must ship
+   together.** A decoder change deployed ahead of the data it decodes -- or
+   vice versa -- fails the version check in `decodeVehicles()` and the page
+   loads empty. `fetch.yml` gets this right today: `promote` copies R2
+   staging to prod *before* it deploys Pages.
 2. **`_redirects` matches on PATH ONLY.** Cloudflare Pages silently ignores
    any rule whose source is an absolute URL (`https://host/*`). Don't write one.
 

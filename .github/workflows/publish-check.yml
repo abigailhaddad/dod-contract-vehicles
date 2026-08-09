@@ -23,7 +23,15 @@ jobs:
           python-version: "3.12"
 
       - name: Install pytest
-        run: pip install pytest
+        run: pip install pytest pyyaml
 
       - name: Check publish scope and file sizes
         run: pytest tests/test_publish.py -v
+
+      # The payload encoding is what keeps vehicles.json + families.json at
+      # ~14 MB instead of 127 MB, and it only works while payload.py and the
+      # decoders in web/index.html agree. Both halves are in the repo, so this
+      # runs on a bare checkout; the size assertions skip without web/data/
+      # and run in the pipeline's test job instead.
+      - name: Check payload encoding
+        run: pytest tests/test_payload.py -v

@@ -1067,6 +1067,114 @@
     }
 
     // ------------------------------------------------------------------
+    // Payload decoding
+    //
+    // vehicles.json and families.json ship columnar + dictionary-encoded
+    // (payload.py). Every visitor downloads both, R2's public endpoint serves
+    // them with no content-encoding, and as plain arrays of row objects they
+    // were 84 MB and 43 MB. Encoded they are ~9 MB and ~6 MB.
+    //
+    // These two functions are the mirrors of decode_vehicles() and
+    // decode_families() in payload.py -- change them together. They hand back
+    // exactly the row objects the tables, filters, charts, drill-downs and CSV
+    // export already expect, so nothing below this point knows about the
+    // encoding.
+    //
+    // Two values are rebuilt rather than transferred: family_id (always
+    // "FAM_{family_method}_{hash}") and an order's USASpending link (always
+    // the same template over piid / parent_piid / a two-part agency code).
+    // ------------------------------------------------------------------
+    const PAYLOAD_V = 1;
+
+    function orderLink(piid, parentPiid, agencyPair) {
+        if (!agencyPair) return null;
+        const a = agencyPair.split('_');
+        return 'https://www.usaspending.gov/award/CONT_AWD_'
+             + piid + '_' + a[0] + '_' + parentPiid + '_' + a[1] + '/';
+    }
+
+    function decodeVehicles(p) {
+        if (!p || p.v !== PAYLOAD_V) throw new Error('vehicles.json: unexpected payload version ' + (p && p.v));
+        const d = p.dicts, c = p.cols, o = p.orders;
+        const pick = (pool, j) => j >= 0 ? d[pool][j] : null;
+        const list = (pool, idxs) => idxs.map(j => d[pool][j]);
+        const rows = new Array(p.n);
+        let k = 0;
+        for (let i = 0; i < p.n; i++) {
+            const method = pick('method', c.family_method[i]);
+            const parentPiid = c.parent_piid[i];
+            const orders = new Array(o.counts[i]);
+            for (let m = 0; m < o.counts[i]; m++, k++) {
+                const piid = o.piid[k];
+                orders[m] = {
+                    piid:       piid,
+                    contractor: pick('contractor', o.contractor[k]),
+                    ceiling:    o.ceiling[k],
+                    obligated:  o.obligated[k],
+                    pop_end:    pick('date', o.pop_end[k]),
+                    status:     pick('status', o.status[k]),
+                    link:       orderLink(piid, parentPiid, pick('agency', o.agency[k])),
+                };
+            }
+            rows[i] = {
+                family_id:         'FAM_' + method + '_' + pick('fam_key', c.fam_key[i]),
+                family_method:     method,
+                status:            pick('status', c.status[i]),
+                parent_award_type: pick('award_type', c.parent_award_type[i]),
+                sub_agency:        pick('sub_agency', c.sub_agency[i]),
+                awarding_office:   pick('office', c.awarding_office[i]),
+                latest_end:        pick('date', c.latest_end[i]),
+                parent_piid:       parentPiid,
+                contractors:       list('contractor', c.contractors[i]),
+                naics_codes:       list('naics', c.naics_codes[i]),
+                states:            list('state', c.states[i]),
+                order_count:       c.order_count[i],
+                active_orders:     c.active_orders[i],
+                contractor_count:  c.contractor_count[i],
+                total_ceiling:     c.total_ceiling[i],
+                total_obligated:   c.total_obligated[i],
+                ceiling_remaining: c.ceiling_remaining[i],
+                pct_ceiling_used:  c.pct_ceiling_used[i],
+                top_orders:        orders,
+            };
+        }
+        return rows;
+    }
+
+    function decodeFamilies(p) {
+        if (!p || p.v !== PAYLOAD_V) throw new Error('families.json: unexpected payload version ' + (p && p.v));
+        const d = p.dicts, c = p.cols;
+        const pick = (pool, j) => j >= 0 ? d[pool][j] : null;
+        const list = (pool, idxs) => idxs.map(j => d[pool][j]);
+        const rows = new Array(p.n);
+        for (let i = 0; i < p.n; i++) {
+            const method = pick('method', c.family_method[i]);
+            rows[i] = {
+                family_id:            'FAM_' + method + '_' + c.fam_key[i],
+                family_method:        method,
+                status:               pick('status', c.status[i]),
+                sub_agency:           pick('sub_agency', c.sub_agency[i]),
+                awarding_office:      pick('office', c.awarding_office[i]),
+                latest_end:           pick('date', c.latest_end[i]),
+                description:          pick('description', c.description[i]),
+                primary_solicitation: pick('solicitation', c.primary_solicitation[i]),
+                multi_award:          pick('flag', c.multi_award[i]),
+                contractors:          list('contractor', c.contractors[i]),
+                naics_codes:          list('naics', c.naics_codes[i]),
+                member_piids:         c.member_piids[i],
+                member_count:         c.member_count[i],
+                order_count:          c.order_count[i],
+                contractor_count:     c.contractor_count[i],
+                family_ceiling:       c.family_ceiling[i],
+                total_obligated:      c.total_obligated[i],
+                ceiling_remaining:    c.ceiling_remaining[i],
+                pct_ceiling_used:     c.pct_ceiling_used[i],
+            };
+        }
+        return rows;
+    }
+
+    // ------------------------------------------------------------------
     // Init
     // ------------------------------------------------------------------
     async function init() {
@@ -1077,8 +1185,8 @@
 
         const [summary, vehicles, families, audit] = await Promise.all([
             fetch(DATA_BASE + '/summary.json').then(r => r.json()),
-            fetch(DATA_BASE + '/vehicles.json').then(r => r.json()),
-            fetch(DATA_BASE + '/families.json').then(r => r.json()).catch(() => []),
+            fetch(DATA_BASE + '/vehicles.json').then(r => r.json()).then(decodeVehicles),
+            fetch(DATA_BASE + '/families.json').then(r => r.json()).then(decodeFamilies).catch(() => []),
             fetch(DATA_BASE + '/grouping_audit.json').then(r => r.json()).catch(() => ({ methods: {}, totals: {} })),
         ]);
 

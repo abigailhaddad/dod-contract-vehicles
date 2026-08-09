@@ -145,6 +145,12 @@ jobs:
       - name: Run data tests
         run: pytest tests/test_data.py -v
 
+      # Size budget on the built payloads. Every visitor downloads these in
+      # full from an R2 endpoint that sends no content-encoding, so a
+      # regression here is a regression in page weight.
+      - name: Run payload tests
+        run: pytest tests/test_payload.py -v
+
       - name: Run frontend tests
         run: pytest tests/test_frontend.py -v
 

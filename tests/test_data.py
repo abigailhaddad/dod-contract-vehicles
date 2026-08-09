@@ -11,6 +11,8 @@ from pathlib import Path
 import pytest
 import yaml
 
+import payload as pl
+
 DATA_DIR = Path("web/data")
 CONFIG_YAML = Path("config.yaml")
 
@@ -22,12 +24,18 @@ def summary():
 
 @pytest.fixture(scope="module")
 def vehicles():
-    return json.loads((DATA_DIR / "vehicles.json").read_text())
+    """Row objects, decoded from the columnar payload the browser downloads.
+
+    These two files ship columnar + dictionary-encoded (payload.py); every
+    assertion below is on what the dashboard actually renders, so decode
+    first. That also means these tests exercise the decoder on real data.
+    """
+    return pl.decode_vehicles(json.loads((DATA_DIR / "vehicles.json").read_text()))
 
 
 @pytest.fixture(scope="module")
 def families():
-    return json.loads((DATA_DIR / "families.json").read_text())
+    return pl.decode_families(json.loads((DATA_DIR / "families.json").read_text()))
 
 
 @pytest.fixture(scope="module")
