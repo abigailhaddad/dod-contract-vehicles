@@ -1,0 +1,47 @@
+name: Deploy to Cloudflare Pages
+
+# Why this exists separately from the deploy step in fetch.yml:
+#
+#   * This covers HUMAN pushes. Vercel published on every push via its git
+#     integration; Cloudflare Pages direct upload does not, so without this,
+#     editing web/index.html and pushing would publish nothing until the next
+#     weekly pipeline run.
+#   * fetch.yml still needs its own deploy step to cover the BOT push, and it
+#     must stage the tracked files rather than pointing wrangler at web/,
+#     because that job writes web/data/ first. Here a fresh checkout has no
+#     web/data/ at all -- it is gitignored build output -- so web/ already
+#     contains exactly the publish set.
+#
+# Deleting either one leaves a path that silently stops publishing.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: pages-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install test deps
+        run: pip install pytest pyyaml
+
+      # Fail here rather than letting wrangler reject the upload: Cloudflare's
+      # error for an oversized or unexpected asset is far vaguer than ours.
+      - name: Publish-scope and size guard
+        run: python -m pytest tests/test_publish.py -q
+
+      - name: Deploy to Cloudflare Pages
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx --yes wrangler@4 pages deploy web --project-name=dod-contract-vehicles --branch=main --commit-dirty=true
