@@ -1,3 +1,17 @@
 {
-  "outputDirectory": "web"
+  "outputDirectory": "web",
+  "redirects": [
+    {
+      "source": "/",
+      "has": [{ "type": "host", "value": "dod-contract-vehicles.vercel.app" }],
+      "destination": "https://dod-contract-vehicles.abigailhaddad.com/",
+      "permanent": false
+    },
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "dod-contract-vehicles.vercel.app" }],
+      "destination": "https://dod-contract-vehicles.abigailhaddad.com/:path*",
+      "permanent": false
+    }
+  ]
 }
