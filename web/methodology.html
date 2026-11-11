@@ -4,6 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Methodology — Defense Contract Vehicles</title>
+    <meta name="description" content="How the Defense Contract Vehicles page groups parent IDIQs, BPAs, GWACs, and FSS schedules and their multi-award siblings into families.">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Methodology — Defense Contract Vehicles">
+    <meta property="og:description" content="How the Defense Contract Vehicles page groups parent IDIQs, BPAs, GWACs, and FSS schedules and their multi-award siblings into families.">
+    <meta name="twitter:card" content="summary">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%232D6A4F'/%3E%3Ctext x='16' y='23' font-family='sans-serif' font-size='18' font-weight='700' text-anchor='middle' fill='white'%3EDV%3C/text%3E%3C/svg%3E">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
@@ -51,6 +57,9 @@
         }
         .methodology-body ul { padding-left: 1.3rem; }
         .methodology-body li { margin-bottom: 0.35rem; }
+        /* Keep wide blocks from stretching the page sideways on a phone. */
+        pre { overflow-x: auto; max-width: 100%; }
+        @media (max-width: 768px) { .config-table { display: block; overflow-x: auto; } }
         .config-table {
             width: 100%;
             border-collapse: collapse;
